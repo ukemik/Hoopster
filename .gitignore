@@ -603,3 +603,4 @@ sql/_roles.sql
 .vscode/settings.json
 CLAUDE.md
 __pycache__/main.cpython-315.pyc
+sql/_roles_prd.sql
