@@ -1,0 +1,10 @@
+# Hoopster - development-only Python packages (rules_coding.md COD-18-01, COD-18-05).
+# Installed locally by the pip section of environment.yaml, after requirements.txt. Render never
+# installs this file. Adding, removing or re-pinning a line is a hard stop (COD-12-04): approved
+# at Gate 1 of task 2026-10-17_dev_environment (decision 4, 2026-10-18).
+# After installing, the browser itself is a separate one-time Overseer command (COD-18-06):
+#   C:\conda_envs\Hoopster_env\python.exe -m playwright install chromium chromium-headless-shell
+# Playwright 1.64 launches headless through the separate chromium-headless-shell build; each
+# Playwright version needs its own build, so re-run the command after any re-pin of this file.
+
+playwright==1.64.0                 # browser automation for the Tester's UI tests (TST-11a-02); pulls pyee and greenlet (greenlet 3.5.6 ships cp315 win_amd64 wheels, checked 2026-10-18)

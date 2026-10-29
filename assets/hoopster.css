@@ -1,0 +1,426 @@
+/*
+ * Hoopster styles. REQ-045: phone first, no sideways scrolling at 380 px, every control at
+ * least 44 px tall. REQ-066: fixed bottom bar. No fixed width above 380 px anywhere.
+ */
+
+/* --- Base --- */
+
+html,
+body {
+  margin: 0;
+  max-width: 100%;
+}
+
+.hoopster-page {
+  padding: 12px 12px calc(84px + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.hoopster-page-inner {
+  width: 100%;
+  min-width: 0;
+}
+
+/* --- Controls: 44 px minimum touch targets --- */
+
+.hoopster-btn,
+.hoopster-page input,
+.hoopster-nav-item {
+  min-height: 44px;
+}
+
+.hoopster-entry-btn {
+  min-height: 60px;
+  font-size: 1.25rem;
+}
+
+button,
+a {
+  touch-action: manipulation;
+}
+
+/* Mantine's small icon buttons (password visibility, drawer close) enlarged to 44 px. */
+.mantine-PasswordInput-visibilityToggle,
+.mantine-Drawer-close {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* Every dialog's close (x) button enlarged to 44 px; the header is taller, so it still fits. */
+.mantine-Modal-header .mantine-Modal-close {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* MultiSelect pills grown to 44 px so each pill's remove button (100% of the pill's height)
+ * is 44 px tall without sticking out of the pill; the input grows to fit the pills. */
+.mantine-MultiSelect-pillsList .mantine-MultiSelect-pill {
+  height: 44px;
+}
+
+.mantine-MultiSelect-pill .mantine-Pill-remove {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* The clear (x) button of every clearable input (Select, DatePickerInput) enlarged to 44 px.
+ * It sits in the input's right section; at CONTROL_SIZE "lg" the input is 50 px tall, so the
+ * section (48 px) holds it. */
+.mantine-Input-section[data-position="right"] .mantine-InputClearButton-root {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* A Select with a value shows the clear button and the chevron side by side (Mantine's
+ * combined clear section, 72 px at "lg"): widened by the 10 px the clear button grew, and the
+ * input text kept clear of it. The html prefix outranks Mantine's own size rule. */
+html .mantine-Input-wrapper[data-with-right-section] > .mantine-Input-section[data-position="right"]:has([data-combined-clear-section]) {
+  --section-size: 82px;
+}
+
+html .mantine-Input-wrapper[data-with-right-section]:has(> .mantine-Input-section [data-combined-clear-section]) {
+  --input-padding-inline-end: 82px;
+}
+
+/* --- Bottom bar --- */
+
+/* REQ-045: when the browser scrolls a control into view (focus, the phone keyboard's "next",
+ * scrollIntoView) it stops the control above the fixed bar, not behind it. Same height as the
+ * bar below. */
+html {
+  scroll-padding-bottom: calc(64px + env(safe-area-inset-bottom));
+}
+
+.hoopster-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  min-height: calc(64px + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  box-sizing: border-box;
+  border-top: 1px solid #dee2e6;
+  background: #ffffff;
+}
+
+.hoopster-nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 0 4px;
+  text-align: center;
+  text-decoration: none;
+  color: inherit;
+  font: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* --- Links that look like buttons (nav_link inside a wrapper div) --- */
+
+.hoopster-link-button > .hoopster-nav-item {
+  min-height: 50px;
+  width: 100%;
+  border-radius: var(--mantine-radius-md, 8px);
+  font-weight: 600;
+}
+
+.hoopster-link-primary > .hoopster-nav-item {
+  background: var(--mantine-primary-color-filled, #fd7e14);
+  color: var(--mantine-color-white, #ffffff);
+}
+
+/* --- Home recent list --- */
+
+.hoopster-recent-item {
+  display: block;
+  min-height: 44px;
+  padding: 6px 4px;
+  box-sizing: border-box;
+  border-bottom: 1px solid #f1f3f5;
+  color: inherit;
+  text-decoration: none;
+}
+
+/* --- Court and helpers --- */
+
+/* The aspect box is the court-graph-wrap div (dcc.Graph ignores className updates); the graph
+ * inside fills it, and Plotly (responsive) fills the graph. */
+.hoopster-court {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 51 / 43;
+  touch-action: manipulation;
+}
+
+/* The graph is taken out of the flow (AP-1): an aspect-ratio box with height auto is never
+ * shorter than its in-flow content, and Plotly's svg keeps the pixel height of the previous
+ * view, so the box grew on a switch to full court and never shrank back. Positioned
+ * absolutely, the graph adds nothing to the box, whose height is then width x aspect only. */
+.hoopster-court-graph {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Full court view (REQ-007): 51 ft wide by 85 ft tall including the axis padding, so the
+ * whole 84 ft court keeps its proportions and the spots stay where they are tapped. */
+.hoopster-court-full {
+  aspect-ratio: 51 / 85;
+}
+
+/* Court player picker buttons (dmc SegmentedControl) at the 44 px touch minimum. */
+.hoopster-player-picker label {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Entry segmented controls (court view, mode, points, details) at the same 44 px minimum.
+ * Labels may wrap, so "Catch & shoot" stays readable at 380 px instead of being cut off. */
+.hoopster-segmented label {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: normal;
+  line-height: 1.2;
+  text-align: center;
+}
+
+/* Entries list items: long labels wrap instead of widening the dialog past 380 px, and each
+ * item stays a 44 px touch target. */
+.hoopster-entry-item {
+  min-height: 44px;
+  height: auto;
+  white-space: normal;
+  text-align: left;
+}
+
+.hoopster-entry-item .mantine-Button-inner {
+  justify-content: flex-start;
+}
+
+.hoopster-entry-item .mantine-Button-label {
+  white-space: normal;
+  height: auto;
+  padding: 6px 0;
+}
+
+.hoopster-hidden {
+  display: none !important;
+}
+
+/* --- Drill library (practice_drills 2a) --- */
+
+/* The library shows cards on phones and the AG Grid from 700 px (REQ-026, REQ-048); both are
+ * always in the page and CSS picks one. */
+.hoopster-wide-only {
+  display: none;
+}
+
+@media (min-width: 700px) {
+  .hoopster-narrow-only {
+    display: none;
+  }
+
+  .hoopster-wide-only {
+    display: block;
+  }
+}
+
+/* Outcome-button "Success" checkboxes of the drill form at the 44 px touch minimum. */
+.hoopster-check {
+  --checkbox-size: 44px !important;
+}
+
+/* --- Practice run mode and overview (practice_drills 2b) --- */
+
+/* Multi-line texts (plan progress, personal bests) keep their line breaks. */
+.hoopster-pre-line {
+  white-space: pre-line;
+}
+
+/* The drill sub-panel of the entry panel: set apart from the court above it. */
+.hoopster-drill-panel {
+  padding: 8px;
+  border: 1px solid #dee2e6;
+  border-radius: var(--mantine-radius-md, 8px);
+}
+
+/* Stopwatch / countdown read-out (REQ-056): large and fixed-width digits. */
+.hoopster-timer {
+  font-size: 2.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* Outcome buttons (REQ-077): two per row at 380 px; long labels wrap instead of widening. */
+.hoopster-outcome-grid .hoopster-btn {
+  min-height: 50px;
+  height: auto;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.hoopster-outcome-grid .hoopster-btn .mantine-Button-label {
+  white-space: normal;
+  text-align: center;
+}
+
+/* Overview blocks: one per placed set or single drill. */
+.hoopster-overview-block {
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f3f5;
+}
+
+/* --- Games (task 2026-10-23_games) --- */
+
+/* Stat tiles (REQ-064): a 44 px tappable box, abbreviation over value, wrapping at 380 px. */
+.hoopster-stat-tile {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 4px;
+  box-sizing: border-box;
+  border: 1px solid #dee2e6;
+  border-radius: var(--mantine-radius-md, 8px);
+  background: #ffffff;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* Live +1 buttons (REQ-021): 60 px, two per row; the label may wrap rather than widen. */
+.hoopster-stat-grid .hoopster-entry-btn {
+  min-height: 60px;
+  height: auto;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.hoopster-stat-grid .hoopster-entry-btn .mantine-Button-label {
+  white-space: normal;
+  text-align: center;
+}
+
+/* Games grid (REQ-048): its fixed height (about 10 rows) is set on the grid; it scrolls inside
+ * itself and never forces the page wider than the screen. */
+.hoopster-games-grid {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+/* --- Dashboards (task 2026-10-23_dashboards) --- */
+
+/* The four view tabs (Shot chart, Trends, Games, Bests) at the 44 px touch minimum; the
+ * labels may wrap at 380 px rather than widen the page. */
+.hoopster-dash-tabs .mantine-Tabs-tab {
+  min-height: 44px;
+  padding-left: 4px;
+  padding-right: 4px;
+  white-space: normal;
+}
+
+/* Season vs season and compare tables (REQ-039, REQ-065): the table scrolls inside itself,
+ * never the page. */
+.hoopster-dash-table {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+/* Tappable stat names in the table rows (REQ-064): a 44 px target, left-aligned. */
+.hoopster-stat-label {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 44px;
+  width: 100%;
+  text-align: left;
+  white-space: nowrap;
+}
+
+/* Colour keys of the heat-map legend and the zone list (REQ-038). */
+.hoopster-swatch {
+  display: inline-block;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  border: 1px solid #868e96;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+/* Trend and warm-up charts never wider than the screen. Their height is set on each graph
+ * (layouts_dashboards.DASH_GRAPH_STYLE, AP-4), so a responsive graph is never 0 px tall. */
+.hoopster-dash-graph {
+  width: 100%;
+  min-width: 0;
+}
+
+/* --- Settings (task 2026-10-23_settings_hub) --- */
+
+/* Enrollment QR code (D15): the SVG has no fixed size, so this sets it; white behind it so a
+ * camera reads it on any background. */
+.hoopster-qr {
+  display: block;
+  width: min(100%, 260px);
+  height: auto;
+  margin: 0 auto;
+  background: #ffffff;
+}
+
+/* The enrollment link and code are long unbroken strings: wrap them anywhere instead of
+ * widening the page past 380 px. */
+.hoopster-code-wrap {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+/* The in-app user manual: long words wrap; wide tables and code scroll inside themselves. */
+.hoopster-manual {
+  overflow-wrap: anywhere;
+}
+
+.hoopster-manual table,
+.hoopster-manual pre {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* --- Import (task 2026-10-23_drill_import) --- */
+
+/* The file drop box (dcc.Upload, REQ-050): full width, a large dashed touch target. */
+.hoopster-upload {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px;
+  box-sizing: border-box;
+  border: 2px dashed #adb5bd;
+  border-radius: var(--mantine-radius-md, 8px);
+  text-align: center;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+/* The "Upload a file" / "Paste a list" tabs at the 44 px touch minimum. */
+.hoopster-tabs .mantine-Tabs-tab {
+  min-height: 44px;
+}

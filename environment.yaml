@@ -1,0 +1,18 @@
+# Hoopster - conda environment (rules_coding.md COD-18-04, COD-18-05).
+# Create, from the project root:   conda env create -f environment.yaml
+# Update an existing environment:   conda env update -f environment.yaml --prune
+# The environment must live at C:\conda_envs\Hoopster_env: that happens when C:\conda_envs is
+# the first entry of conda's envs_dirs (see config/README.md, "Creating the environment").
+# Conda supplies only Python and pip. Every package comes through pip: requirements.txt is the
+# runtime list (the same file Render installs) and requirements-dev.txt adds the dev-only
+# test tooling, which Render never sees.
+name: Hoopster_env
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.15
+  - pip
+  - pip:
+      - -r requirements.txt
+      - -r requirements-dev.txt

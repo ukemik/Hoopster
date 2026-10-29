@@ -1,0 +1,17 @@
+{
+  "name": "Hoopster",
+  "short_name": "Hoopster",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#fd7e14",
+  "icons": [
+    {
+      "src": "/assets/hoopster-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
