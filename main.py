@@ -19,12 +19,14 @@ from datetime import timedelta
 
 from dash import Dash
 from dotenv import load_dotenv
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from config.app_config import APP_TITLE, DEV_LISTEN_HOST, REMEMBER_ME_DAYS, load_settings
 from config.logging_config import configure_logging
 from src import controller_home, controller_players, controller_practice
 from src.app_controller import register_request_pipeline, register_router
 from src.controller_access import register_access
+from src.controller_signup import register_signup
 from src.controller_entry import register_entry_callbacks
 from src.controller_home import register_home_callbacks
 from src.controller_players import register_players_callbacks
@@ -139,8 +141,15 @@ server.config.update(
     REMEMBER_COOKIE_SECURE=settings.is_production,
 )
 
+# Behind Render's proxy (production only): take the client address and https from the proxy's
+# X-Forwarded-For / X-Forwarded-Proto, so the wrong-code throttle is per client and links
+# say https. Never locally, where nothing sets those headers and a client could fake them.
+if settings.is_production:
+    server.wsgi_app = ProxyFix(server.wsgi_app, x_for=1, x_proto=1)  # type: ignore[method-assign]
+
 register_request_pipeline(server, settings)
 register_access(app, server, settings)
+register_signup(server, settings)
 register_router(
     app,
     {

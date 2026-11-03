@@ -29,6 +29,7 @@ from config.app_config import (
     DEVICE_COOKIE_NAME,
     DEVICE_KEY_SALT,
     ENROLL_ENDPOINT,
+    JOIN_ENDPOINT,
     LAST_SEEN_INTERVAL_MINUTES,
     SYSTEM_USER_ID,
     AppSettings,
@@ -472,6 +473,9 @@ HEALTH_PATH_LOG_TEXT = "[health path]"
 ENROLL_PATH_LOG_TEXT = "/enroll/[code]"
 # First path segment of an enrollment URL; any path in it is masked in the log.
 ENROLL_PATH_SEGMENT = "enroll"
+# The same for one-time sign-up links (/join/<code>).
+JOIN_PATH_LOG_TEXT = "/join/[code]"
+JOIN_PATH_SEGMENT = "join"
 
 # Dash callbacks a signed-out browser may call: the router and the login form (REQ-002).
 PUBLIC_CALLBACK_OUTPUT_IDS: frozenset[str] = frozenset(
@@ -568,6 +572,8 @@ def loggable_path(settings: AppSettings) -> str:
     first_segment = folded.split("/", 2)[1]
     if first_segment == ENROLL_PATH_SEGMENT or request.endpoint == ENROLL_ENDPOINT:
         return ENROLL_PATH_LOG_TEXT
+    if first_segment == JOIN_PATH_SEGMENT or request.endpoint == JOIN_ENDPOINT:
+        return JOIN_PATH_LOG_TEXT
     return request.path
 
 
@@ -640,7 +646,7 @@ def guard_request(settings: AppSettings) -> Response | None:
     """
     Description:
         before_request hook body (plan §3.2): the exact-path exemptions (health page,
-        robots.txt, the enrollment endpoint), then the device check, then the signed-out
+        robots.txt, the enrollment and sign-up endpoints), then the device check, then the signed-out
         callback guard.
 
     Parameters:
@@ -660,7 +666,7 @@ def guard_request(settings: AppSettings) -> Response | None:
         return response
     if request.path == ROBOTS_TXT_PATH:
         return plain_text_response(ROBOTS_TXT_BODY, 200)
-    if request.endpoint == ENROLL_ENDPOINT:
+    if request.endpoint in (ENROLL_ENDPOINT, JOIN_ENDPOINT):
         return None
 
     refused = _verify_device(settings)

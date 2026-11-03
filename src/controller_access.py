@@ -495,6 +495,25 @@ def _enroll_this_device(
         )
 
     logger.info("Enrolled device %s named %r (%s code)", result.value, device_name, kind)
+    return device_cookie_redirect(raw_key, settings)
+
+
+def device_cookie_redirect(raw_key: str, settings: AppSettings) -> Response:
+    """
+    Description:
+        The response that ends a successful enrollment: a 303 redirect to "/" carrying the
+        signed device cookie.
+
+    Parameters:
+        raw_key: the new device's raw key. Only its signed form leaves the server.
+        settings: the application settings (device-key secret, production flag).
+
+    Return Values:
+        Response: the redirect with the cookie set.
+
+    Notes:
+        Shared by /enroll/<code> and /join/<code> (controller_signup).
+    """
     response = redirect("/", code=303)
     response.set_cookie(
         DEVICE_COOKIE_NAME,

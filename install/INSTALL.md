@@ -550,12 +550,15 @@ section 6.13.4); set it the same way as section 3.4 Step 3 when prod exists.
    `server` is the plain WSGI object `main.py` exposes (`COD-20-02`); Render supplies `PORT`.
    Exactly **one worker**: the enrollment wrong-code throttle lives in process memory. Threads
    serve concurrent requests. *Not yet verified on Render.*
-5. **Accounts on Neon.** Run the setup script of section 3.5 Step 2 once against Neon, from the
-   PC, with `DATABASE_URL` overridden for that terminal only (the user variable is untouched;
-   choose a new enrollment code for prod):
-   `$env:DATABASE_URL = 'postgresql+psycopg://hoopster_app:<SET_PASSWORD>@<neon-host>/hoopster_db?sslmode=require'`,
-   then `C:\conda_envs\Hoopster_env\python.exe -m src.setup_accounts`, then close that terminal.
-   *Not yet verified on Neon.*
+5. **Accounts on prod: one-time sign-up links** (2026-10-30; replaces running `setup_accounts`
+   against Neon). Once, create a settings file **outside the project**, e.g.
+   `%USERPROFILE%\hoopster_prod.env`, with two lines:
+   `DATABASE_URL=postgresql+psycopg://hoopster_app:<SET_PASSWORD>@<neon-pooler-host>/hoopster_db?sslmode=require`
+   and `APP_BASE_URL=https://<your-service>.onrender.com`. Then, for each person:
+   `C:\conda_envs\Hoopster_env\python.exe -m src.make_signup_link --env-file "$HOME\hoopster_prod.env"`
+   prints a link `https://<your-service>.onrender.com/join/<code>`. Open it on that person's
+   phone: they enter name, email and password, the account is created and the phone is added.
+   The link works once and expires after 30 minutes; making a new link cancels an unused one.
 
 ### 4.4 Render environment variables
 

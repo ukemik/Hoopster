@@ -37,6 +37,15 @@ ENROLL_ENDPOINT = "hoopster_enroll"
 ENROLL_MAX_WRONG_CODES = 5
 ENROLL_WRONG_WINDOW_MINUTES = 15
 
+# One-time sign-up links (task 2026-10-29_deploy_render_neon): made on the Overseer's PC with
+# python -m src.make_signup_link, opened at /join/<code> to create one account and add that
+# device. Stored in h_system.enrollment_codes with created_by = SYSTEM_USER_ID; at most 60
+# minutes by ck_enrollment_codes_expiry.
+JOIN_ENDPOINT = "hoopster_join"
+SIGNUP_LINK_VALID_MINUTES = 30
+# Optional variable read by make_signup_link only: the public address the link starts with.
+APP_BASE_URL_VARIABLE = "APP_BASE_URL"
+
 # Password and enrollment-code hashing and the setup script's input rules.
 PASSWORD_HASH_METHOD = "scrypt:32768:8:1"
 MIN_PASSWORD_LENGTH = 10
