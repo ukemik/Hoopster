@@ -80,6 +80,8 @@ COURT_CLASS = "hoopster-court"
 COURT_GRAPH_CLASS = "hoopster-court-graph"
 
 COURT_SELECT_PROMPT = "Tap a spot on the court"
+# The court Undo removes the last entry of either kind, field goal or free throw (REQ-010).
+UNDO_LABEL = "Undo last entry"
 RETRY_HIDDEN_STYLE: dict[str, str] = {"display": "none"}
 HIDDEN_CLASS = "hoopster-hidden"
 
@@ -864,7 +866,7 @@ def _entry_stores(
     Return Values:
         list[Component]: entry-parent, court-base, court-figures, court-selected-spot,
         court-queue, court-confirmed, court-outbox, court-ack, court-request, court-failure,
-        court-details-memory, court-watchdog.
+        court-undo-note, court-details-memory, court-watchdog.
 
     Notes:
         All in memory except court-details-memory (session storage, no data argument, so a
@@ -885,6 +887,9 @@ def _entry_stores(
         dcc.Store(id="court-ack", storage_type="memory"),
         dcc.Store(id="court-request", storage_type="memory"),
         dcc.Store(id="court-failure", storage_type="memory"),
+        # An Undo that cancelled a queued insert before it was sent gets no ack; this note
+        # lets the badge still say what was undone (task 2026-11-03_shot_undo).
+        dcc.Store(id="court-undo-note", storage_type="memory"),
         dcc.Store(id="court-details-memory", storage_type="session"),
         dcc.Interval(id="court-watchdog", interval=COURT_WATCHDOG_INTERVAL_MS, disabled=True),
     ]
@@ -1000,8 +1005,8 @@ def entry_panel(
     Description:
         Every shared control and store of an entry screen, in display order: court view
         toggle, mode switch, field-goal tally, court, selected spot, the drill sub-panel, the
-        three field-goal panels, shot details, the free-throw counter, form feedback, Undo /
-        save status / Retry, Entries, the entry dialogs and the stores.
+        three field-goal panels, form feedback, Undo / save status / Retry, shot details, the
+        free-throw counter, Entries, the entry dialogs and the stores.
 
     Parameters:
         parent: the entry parent as a plain dict {"kind": "practice" | "game" | "drill",
@@ -1096,19 +1101,21 @@ def entry_panel(
         dmc.Text(selected_label, id="court-selected-label"),
         _drill_panel(drill, default_player_id),
         *_shot_panels(selected_spot is not None),
+        form_message("court-form-feedback"),
+        # Directly under Make / Miss (task 2026-11-03_shot_undo): one Undo for the last entry
+        # of either kind, so on a phone it is not read as part of the free-throw counter.
+        dmc.Group(
+            [
+                secondary_button("court-undo", UNDO_LABEL, disabled=True),
+                save_status_badge("court-status"),
+                retry_button,
+            ]
+        ),
         _details_area(shot_types),
         html.Div(
             dmc.Stack(_free_throw_section(default_totals)),
             id="court-ft-area",
             className="" if show_free_throws else HIDDEN_CLASS,
-        ),
-        form_message("court-form-feedback"),
-        dmc.Group(
-            [
-                secondary_button("court-undo", "Undo", disabled=True),
-                save_status_badge("court-status"),
-                retry_button,
-            ]
         ),
         entries_button,
         *entry_dialogs(),

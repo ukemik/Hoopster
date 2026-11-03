@@ -1219,6 +1219,7 @@ def _register_court_callbacks(app: Dash) -> None:
         Output("court-confirmed", "data"),
         Output("court-outbox", "data"),
         Output("court-failure", "data"),
+        Output("court-undo-note", "data"),
         Input("court-make", "n_clicks"),
         Input("court-miss", "n_clicks"),
         Input("court-ft-make", "n_clicks"),
@@ -1262,6 +1263,7 @@ def _register_court_callbacks(app: Dash) -> None:
         Input("court-failure", "data"),
         Input("court-player", "value"),
         Input("court-attempt-request", "data"),
+        Input("court-undo-note", "data"),
     )
 
     app.callback(

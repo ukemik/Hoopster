@@ -65,7 +65,7 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
     var KEY_SUFFIX_LENGTH = 6;
     var KEY_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
     var DEFAULT_ZONE = "UTC";
-    var COMMAND_STORE_COUNT = 4;
+    var COMMAND_STORE_COUNT = 5;
     var SELECT_SPOT_OUTPUT_COUNT = 6;
     var FORM_OUTPUT_COUNT = 8;
     var DETAIL_COUNT = 4;
@@ -75,6 +75,10 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
     var STATUS_SAVING = { text: "Saving...", color: "blue" };
     var STATUS_FAILED_COLOR = "red";
     var STATUS_SAVED_COLOR = "green";
+    // After an Undo the badge names what was removed (task 2026-11-03_shot_undo), so an
+    // undone shot is never mistaken for an undone free throw or a plain save.
+    var STATUS_UNDONE_COLOR = "gray";
+    var UNDONE_TEXT = { shot: "Undone shot", free_throw: "Undone free throw" };
     var RETRY_SHOWN_STYLE = {};
     var RETRY_HIDDEN_STYLE = { display: "none" };
 
@@ -221,6 +225,14 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
 
     function noUpdate() {
       return window.dash_clientside.no_update;
+    }
+
+    // The device's local time as "HH:MM:SS", like the server's saved_at.
+    function deviceClockText() {
+      var now = new Date();
+      return [now.getHours(), now.getMinutes(), now.getSeconds()].map(function (part) {
+        return (part < 10 ? "0" : "") + part;
+      }).join(":");
     }
 
     function noUpdates(count) {
@@ -794,7 +806,7 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
       // --- Court: the single writer of the command stores (plan §3.6) ---
 
       // Outputs: court-queue.data, court-confirmed.data, court-outbox.data,
-      // court-failure.data. An output that did not change returns no_update, so an unchanged
+      // court-failure.data, court-undo-note.data. An output that did not change returns no_update, so an unchanged
       // outbox never re-fires the server callback. parent (entry-parent) is not sent; the
       // server reads it from the store. court-ack arrives from the server's set_props; a late
       // ack whose key or attempt no longer matches the outbox is ignored. playerValue
@@ -821,6 +833,10 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
         var confirmedChanged = false;
         var outboxChanged = false;
         var failureChanged = false;
+        // court-undo-note: {table, at} after an Undo that cancelled a queued insert (no ack
+        // will come for it); cleared by the next Make, Miss, FT, form entry or acked Undo.
+        var nextNote = null;
+        var noteChanged = false;
         // False after a failed or timed-out send: the head waits for a retry.
         var maySend = true;
         var now = Date.now();
@@ -835,6 +851,7 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
             detailsOf(shotType, hand, creation, defense)
           ), parent, attemptRequest, drillSide, base));
           queueChanged = true;
+          noteChanged = true;
         } else if (trigger === "court-ft-make" || trigger === "court-ft-miss") {
           if (isNaN(playerId)) {
             return noUpdates(COMMAND_STORE_COUNT);
@@ -844,6 +861,7 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
             trigger === "court-ft-make" ? 1 : 0, 1, null
           ), parent, attemptRequest, drillSide, base));
           queueChanged = true;
+          noteChanged = true;
         } else if (trigger === "court-request") {
           if (!request || typeof request !== "object" || !request.request_id) {
             return noUpdates(COMMAND_STORE_COUNT);
@@ -853,16 +871,23 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
             request.point_value, request.makes, request.attempts, request.details
           ), parent, attemptRequest, drillSide, base));
           queueChanged = true;
+          noteChanged = true;
         } else if (trigger === "court-undo") {
           if (isNaN(playerId)) {
             return noUpdates(COMMAND_STORE_COUNT);
           }
+          var undoable = effectiveEntries(nextQueue, nextConfirmed, playerId);
           var undone = applyUndo(nextQueue, nextConfirmed, nextOutbox, playerId);
           if (undone === null) {
             return noUpdates(COMMAND_STORE_COUNT);
           }
+          if (undone.length < nextQueue.length) {
+            // A queued insert was cancelled before sending: no ack will report it.
+            nextNote = { table: undoable[undoable.length - 1].table, at: deviceClockText() };
+          }
           nextQueue = undone;
           queueChanged = true;
+          noteChanged = true;
         } else if (trigger === "court-retry") {
           if (nextOutbox || !nextQueue.length) {
             return noUpdates(COMMAND_STORE_COUNT);
@@ -954,6 +979,7 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
           confirmedChanged ? nextConfirmed : noUpdate(),
           outboxChanged ? nextOutbox : noUpdate(),
           failureChanged ? nextFailure : noUpdate(),
+          noteChanged ? nextNote : noUpdate(),
         ];
       },
 
@@ -961,13 +987,14 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
 
       // Outputs: court-tally.children, court-ft-tally.children, court-status.children,
       // court-status.color, court-retry.style, court-undo.disabled, court-watchdog.disabled.
-      // The tallies and Undo are for the picked player; the save status covers every
+      // After an Undo the badge says "Undone shot / free throw HH:MM:SS": from court-undo-note
+      // when the Undo cancelled an unsent entry, else from the delete ack. The tallies and Undo are for the picked player; the save status covers every
       // player's commands. The watchdog runs while a command is in flight or while a failed
       // save still has automatic retries left. Drill mode: while the picked player has a
       // pending New attempt request (court-attempt-request), the tallies start from 0
       // instead of the base (plan §3.7); on other screens the request store stays {}.
       court_render: function (
-        base, queue, confirmed, outbox, ack, failure, playerValue, attemptRequest
+        base, queue, confirmed, outbox, ack, failure, playerValue, attemptRequest, undoNote
       ) {
         var playerId = parsePlayerId(playerValue);
         var pending = queue || [];
@@ -992,6 +1019,12 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
           }
           statusText += retriesLeft ? ". Retrying..." : ". Tap Retry.";
           statusColor = STATUS_FAILED_COLOR;
+        } else if (undoNote && undoNote.table) {
+          statusText = (UNDONE_TEXT[undoNote.table] || "Undone") + " " + undoNote.at;
+          statusColor = STATUS_UNDONE_COLOR;
+        } else if (ack && ack.ok && ack.op === "delete") {
+          statusText = (UNDONE_TEXT[ack.table] || "Undone") + " " + ack.saved_at;
+          statusColor = STATUS_UNDONE_COLOR;
         } else if (ack && ack.ok) {
           statusText = "Saved " + ack.saved_at;
           statusColor = STATUS_SAVED_COLOR;
