@@ -35,7 +35,15 @@ STATUS_ABANDONED = "abandoned"
 # A batch in one of these statuses can still be checked, published or abandoned.
 OPEN_STATUSES: tuple[str, ...] = (STATUS_LOADED, STATUS_HAS_ERRORS, STATUS_READY)
 # Result types fn_check_drill_batch refuses (Gate 1 Q8); the paste form does not offer them.
-NOT_IMPORTABLE_RESULT_TYPES: frozenset[str] = frozenset({"outcome_buttons", "physical"})
+# fixed_time_errors: its fixed time is refused by the check function, which allows a fixed
+# time only for fixed_time_reps (task 2026-11-04_fixed_time_errors; add it in the app).
+NOT_IMPORTABLE_RESULT_TYPES: frozenset[str] = frozenset(
+    {"outcome_buttons", "physical", "fixed_time_errors"}
+)
+# Of those, the ones fn_check_drill_batch does NOT refuse itself: a file naming one is refused
+# by the app before staging (controller_import.file_staged_rows), so no batch shows "ready"
+# and then fails at publish.
+APP_REFUSED_RESULT_TYPES: dict[str, str] = {"fixed_time_errors": "Fixed time for errors"}
 # ck_import_batches_source_name.
 SOURCE_NAME_MAX_LENGTH = 200
 

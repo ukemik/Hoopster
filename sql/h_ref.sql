@@ -481,10 +481,11 @@ VALUES
     ('outcome_buttons', 'Outcome buttons',        2, 'outcomes', 0, NULL,    true,  false, 'One tap per outcome group records one rep; buttons marked success give a clean-rep percentage per group.'),
     ('fixed_task_time', 'Fixed task for time',    3, 'values',   1, 's',     false, false, 'Seconds to complete a fixed task; lower is better.'),
     ('fixed_time_reps', 'Fixed time for reps',    4, 'values',   1, 'count', true,  true,  'Count within the drill''s fixed time; the rate per minute is derived.'),
-    ('failure_streak',  'To failure: max streak', 5, 'values',   1, 'count', true,  false, 'Count reached before failure; higher is better.'),
-    ('failure_time',    'To failure: time',       6, 'values',   1, 's',     true,  false, 'Seconds held before failure; higher is better.'),
-    ('physical',        'Physical measurement',   7, 'values',   2, NULL,    NULL,  false, 'Up to two named numbers per attempt, each with a unit and a better direction set on the drill.'),
-    ('reaction_time',   'Reaction time',          8, 'values',   1, 's',     false, false, 'Seconds to react; lower is better.');
+    ('fixed_time_errors', 'Fixed time for errors', 5, 'values',  1, 'count', false, true,  'Errors (for example fumbles) counted within the drill''s fixed time; lower is better.'),
+    ('failure_streak',  'To failure: max streak', 6, 'values',   1, 'count', true,  false, 'Count reached before failure; higher is better.'),
+    ('failure_time',    'To failure: time',       7, 'values',   1, 's',     true,  false, 'Seconds held before failure; higher is better.'),
+    ('physical',        'Physical measurement',   8, 'values',   2, NULL,    NULL,  false, 'Up to two named numbers per attempt, each with a unit and a better direction set on the drill.'),
+    ('reaction_time',   'Reaction time',          9, 'values',   1, 's',     false, false, 'Seconds to react; lower is better.');
 
 INSERT INTO h_ref.symmetry_types (symmetry_type_code, label, sort_order, left_label, right_label) VALUES
     ('hand',       'Hand',                        1, 'Left hand',          'Right hand'),
@@ -639,7 +640,7 @@ BEGIN
     IF (SELECT count(*) FROM h_ref.physical_tests) <> 7 THEN
         RAISE EXCEPTION 'h_ref seed check failed: physical tests';
     END IF;
-    IF (SELECT count(*) FROM h_ref.result_types) <> 8
+    IF (SELECT count(*) FROM h_ref.result_types) <> 9
        OR (SELECT count(*) FROM h_ref.symmetry_types) <> 6 THEN
         RAISE EXCEPTION 'h_ref seed check failed: result or symmetry types';
     END IF;

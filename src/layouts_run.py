@@ -47,10 +47,13 @@ DEFAULT_SIDE = "left"
 # Result types (h_ref.result_types) that drive the values panel (plan §3.6, D17).
 RESULT_FIXED_TASK_TIME = "fixed_task_time"
 RESULT_FIXED_TIME_REPS = "fixed_time_reps"
+# Errors (e.g. fumbles) in the drill's fixed time; lower is better (task
+# 2026-11-04_fixed_time_errors).
+RESULT_FIXED_TIME_ERRORS = "fixed_time_errors"
 RESULT_FAILURE_TIME = "failure_time"
 RESULT_PHYSICAL = "physical"
 STOPWATCH_TYPES: frozenset[str] = frozenset({RESULT_FIXED_TASK_TIME, RESULT_FAILURE_TIME})
-COUNTDOWN_TYPES: frozenset[str] = frozenset({RESULT_FIXED_TIME_REPS})
+COUNTDOWN_TYPES: frozenset[str] = frozenset({RESULT_FIXED_TIME_REPS, RESULT_FIXED_TIME_ERRORS})
 TIMER_MODE_STOPWATCH = "stopwatch"
 TIMER_MODE_COUNTDOWN = "countdown"
 UNIT_SECONDS = "s"
@@ -661,6 +664,8 @@ def _value_label(drill: dict, number: int) -> str:
         return f"{label} ({unit})" if unit else str(label)
     if drill.get("result_type_code") == RESULT_FIXED_TIME_REPS:
         return f"Reps in {drill.get('fixed_seconds')} s"
+    if drill.get("result_type_code") == RESULT_FIXED_TIME_ERRORS:
+        return f"Errors in {drill.get('fixed_seconds')} s"
     return "Seconds" if drill.get("value_unit") == UNIT_SECONDS else "Count"
 
 
@@ -707,7 +712,7 @@ def _timer_controls(drill: dict) -> list[Component]:
     """
     Description:
         The stopwatch (Fixed task for time, To failure: time) or countdown (Fixed time for
-        reps) of a values drill (REQ-056, D17); none for other types.
+        reps, Fixed time for errors) of a values drill (REQ-056, D17); none for other types.
 
     Parameters:
         drill: a get_run_drill row.
