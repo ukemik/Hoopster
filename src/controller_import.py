@@ -52,6 +52,7 @@ from src.app_controller import (
 )
 from src.data_drills import list_reference_options
 from src.data_import import (
+    APP_REFUSED_RESULT_TYPES,
     IMPORT_ITEM_TYPES,
     NOT_IMPORTABLE_RESULT_TYPES,
     OPEN_STATUSES,
@@ -93,6 +94,9 @@ MESSAGE_TOO_MANY_ROWS = (
     f"The file has more than {IMPORT_MAX_ROWS} rows; split it into smaller files."
 )
 MESSAGE_TOO_MANY_EMPTY_ROWS = "The file has too many empty rows; delete them and load it again."
+MESSAGE_NOT_IMPORTABLE = "Row {row_no}: {label} drills cannot be imported yet; add them in the app."
+# The staging column holding the result type code (data_import.DRILL_IMPORT_COLUMNS).
+RESULT_TYPE_COLUMN = "result_type"
 MESSAGE_PASTE_EMPTY = "Paste at least one drill name."
 MESSAGE_PASTE_TOO_MANY = (
     f"The list has more than {IMPORT_MAX_ROWS} lines; split it into smaller lists."
@@ -610,6 +614,29 @@ def map_columns(header: list[str], item: ImportItemType) -> dict[str, int] | str
     return column_map
 
 
+def _app_refused_label(cell: str | None) -> str | None:
+    """
+    Description:
+        Whether a file's result_type cell names a type the app refuses before staging, by
+        its code or its label, as fn_check_drill_batch accepts either (case-insensitive,
+        trimmed).
+
+    Parameters:
+        cell: the raw result_type cell, or None.
+
+    Return Values:
+        str | None: the refused type's label, or None.
+
+    Notes:
+        Pure.
+    """
+    text = (cell or "").strip().lower()
+    for code, label in APP_REFUSED_RESULT_TYPES.items():
+        if text in (code, label.lower()):
+            return label
+    return None
+
+
 def file_staged_rows(
     records: list[list[str]], column_map: dict[str, int], item: ImportItemType
 ) -> list[StagedRow] | str:
@@ -624,7 +651,9 @@ def file_staged_rows(
 
     Return Values:
         list[StagedRow] | str: the rows, or "The file has no {plural}." / "The file has more
-        than 500 rows; split it into smaller files.".
+        than 500 rows; split it into smaller files." / "Row n: {label} drills cannot be
+        imported yet; add them in the app." (a result type in APP_REFUSED_RESULT_TYPES, which
+        the check function would not refuse).
 
     Notes:
         Pure. row_no is the spreadsheet row (header = 1, first data row = 2, D8); a record
@@ -642,6 +671,9 @@ def file_staged_rows(
                 cells[column] = text
         if blank:
             continue
+        refused = _app_refused_label(cells.get(RESULT_TYPE_COLUMN))
+        if refused is not None:
+            return MESSAGE_NOT_IMPORTABLE.format(row_no=row_no, label=refused)
         rows.append({"row_no": row_no, "cells": cells})
         if len(rows) > IMPORT_MAX_ROWS:
             return MESSAGE_TOO_MANY_ROWS
