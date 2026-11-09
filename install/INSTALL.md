@@ -140,7 +140,7 @@ uses; `h_data` references `h_ref`; `h_analytics` views reference `h_data` and `h
 `h_staging` publishes into `h_data`. Each file runs a wipe guard, drops its schema
 (`DROP SCHEMA IF EXISTS ... CASCADE`) and rebuilds it, all in one transaction (see the warning
 above). On a fresh database there are no accounts yet, so the guard lets every file through
-without `PGOPTIONS`. The files also seed the reference data (25 NFHS court spots, lookup lists
+without `PGOPTIONS`. The files also seed the reference data (27 NFHS court spots, lookup lists
 including 8 drill result types and 6 symmetry types, the 44-drill starter catalogue, system user
 0).
 
@@ -449,7 +449,7 @@ had its data cleared - sees only a plain `Not Found` page on every address.
 |---|---|---|---|
 | 1 | Database reachable as the read-only role | `& $psql -h localhost -U hoopster_agent_ro -d hoopster_db -c "SELECT current_user, current_database(), version();"` | `hoopster_agent_ro`, `hoopster_db`, a `PostgreSQL 18` (or 17) version string |
 | 2 | Five schemas present | `& $psql -h localhost -U hoopster_agent_ro -d hoopster_db -c "SELECT nspname FROM pg_namespace WHERE nspname LIKE 'h\_%' ORDER BY 1;"` | `h_analytics`, `h_data`, `h_ref`, `h_staging`, `h_system` |
-| 3 | Seed data present | `& $psql -h localhost -U hoopster_agent_ro -d hoopster_db -c "SELECT (SELECT count(*) FROM h_ref.court_spots) AS spots, (SELECT count(*) FROM h_data.drills) AS drills, (SELECT count(*) FROM h_ref.result_types) AS result_types, (SELECT count(*) FROM h_system.users WHERE user_id = 0) AS system_user;"` | `25`, `44`, `8`, `1` |
+| 3 | Seed data present | `& $psql -h localhost -U hoopster_agent_ro -d hoopster_db -c "SELECT (SELECT count(*) FROM h_ref.court_spots) AS spots, (SELECT count(*) FROM h_data.drills) AS drills, (SELECT count(*) FROM h_ref.result_types) AS result_types, (SELECT count(*) FROM h_system.users WHERE user_id = 0) AS system_user;"` | `27`, `44`, `9`, `1` |
 | 4 | Read-only role cannot write | `& $psql -h localhost -U hoopster_agent_ro -d hoopster_db -c "UPDATE h_system.app_settings SET setting_value = setting_value;"` | an error: cannot execute UPDATE in a read-only transaction |
 | 5 | Environment location | `conda env list` | `Hoopster_env` at `C:\conda_envs\Hoopster_env` |
 | 6 | Interpreter | section 3.3 Step 4, first line | `3.15.x`, `C:\conda_envs\Hoopster_env\python.exe` |
@@ -596,7 +596,7 @@ database connection. *Not yet verified on Render.*
 | # | Check | Expected |
 |---|---|---|
 | 1 | psql as `hoopster_agent_ro` against Neon (`?sslmode=require`): `SELECT current_user, current_database(), version();` | `hoopster_agent_ro`, `hoopster_db`, `PostgreSQL 18` (or 17) |
-| 2 | Seed counts as in section 3.6 check 3 | `25`, `44`, `8`, `1` |
+| 2 | Seed counts as in section 3.6 check 3 | `27`, `44`, `9`, `1` |
 | 3 | Neon console / SQL Editor still connects after the PUBLIC revoke | works (*not yet verified on Neon*) |
 | 4 | Render build log | `requirements.txt` installed, `gunicorn` present, no `requirements-dev.txt`, no compiler invoked |
 | 5 | `https://<your-service>.onrender.com<HEALTH_PATH>`; also `https://<your-service>.onrender.com/` from a browser never enrolled on prod | the health URL returns `200` with body `ok` and opens no database connection; the plain address returns `404 Not Found` (*not yet verified on Render*) |

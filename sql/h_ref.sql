@@ -33,7 +33,7 @@
 -- ├─────┼─────────────────────┼─────────────┼─────────────────────────────────────────────────────────────┤
 -- │ 3   │ sql/h_system.sql    │ hoopster_db │ Users, settings, devices, login attempts, audit stamping    │
 -- ├─────┼─────────────────────┼─────────────┼─────────────────────────────────────────────────────────────┤
--- │ 4   │ sql/h_ref.sql       │ hoopster_db │ Lookup lists, the 25 court spots, heat-map bands            │
+-- │ 4   │ sql/h_ref.sql       │ hoopster_db │ Lookup lists, the 27 court spots, heat-map bands            │
 -- ├─────┼─────────────────────┼─────────────┼─────────────────────────────────────────────────────────────┤
 -- │ 5   │ sql/h_data.sql      │ hoopster_db │ Players, games, practices, shots, drills (44 seeded), goals │
 -- ├─────┼─────────────────────┼─────────────┼─────────────────────────────────────────────────────────────┤
@@ -342,7 +342,7 @@ CREATE TABLE h_ref.court_spots (
     CONSTRAINT fk_court_spots_updated_by FOREIGN KEY (updated_by) REFERENCES h_system.users (user_id)
 );
 COMMENT ON TABLE h_ref.court_spots IS
-    'The 25 court spots (REQ-007, REQ-008, Appendix A). Feet; origin = baseline midpoint under the basket; x right as seen on screen (-25..25), y into the court (0..42). Reference spots by court_spot_id, never by spot_number.';
+    'The 27 court spots (REQ-007, REQ-008, Appendix A). Feet; origin = baseline midpoint under the basket; x right as seen on screen (-25..25), y into the court (0..42). Reference spots by court_spot_id, never by spot_number.';
 CREATE UNIQUE INDEX ux_court_spots_number ON h_ref.court_spots (spot_number) WHERE deleted_at IS NULL;
 CREATE UNIQUE INDEX ux_court_spots_name ON h_ref.court_spots (lower(spot_name)) WHERE deleted_at IS NULL;
 
@@ -569,17 +569,17 @@ VALUES
 -- 6.14.1 Court spots (NFHS geometry; zone by code)
 INSERT INTO h_ref.court_spots (spot_number, spot_name, zone_code, x_ft, y_ft) VALUES
     ( 1, 'At the rim',               'paint',       0.00,  7.00),
-    ( 2, 'Left block',               'paint',      -4.50,  7.50),
-    ( 3, 'Right block',              'paint',       4.50,  7.50),
+    ( 2, 'Left block',               'paint',      -6.00,  7.50),
+    ( 3, 'Right block',              'paint',       6.00,  7.50),
     ( 4, 'Middle paint (floater)',   'paint',       0.00, 13.00),
     ( 5, 'Left baseline, long two',  'mid_range', -17.00,  3.00),
     ( 6, 'Left baseline, short',     'mid_range', -10.50,  3.00),
     ( 7, 'Right baseline, short',    'mid_range',  10.50,  3.00),
     ( 8, 'Right baseline, long two', 'mid_range',  17.00,  3.00),
-    ( 9, 'Left wing, mid-range',     'mid_range',  -8.50, 13.70),
+    ( 9, 'Left wing, mid-range',     'mid_range',  -6.00, 13.70),
     (10, 'Left elbow',               'mid_range',  -6.50, 19.50),
     (11, 'Right elbow',              'mid_range',   6.50, 19.50),
-    (12, 'Right wing, mid-range',    'mid_range',   8.50, 13.70),
+    (12, 'Right wing, mid-range',    'mid_range',   6.00, 13.70),
     (13, 'Left wing, long two',      'mid_range', -12.40, 17.60),
     (14, 'Top of the key',           'mid_range',   0.00, 23.00),
     (15, 'Right wing, long two',     'mid_range',  12.40, 17.60),
@@ -592,7 +592,9 @@ INSERT INTO h_ref.court_spots (spot_number, spot_name, zone_code, x_ft, y_ft) VA
     (22, 'Right wing three',         'three',      15.40, 20.60),
     (23, 'Right short wing three',   'three',      20.40, 12.70),
     (24, 'Right corner three',       'three',      22.00,  3.00),
-    (25, 'Deep three',               'three',       0.00, 32.00);
+    (25, 'Deep three',               'three',       0.00, 32.00),
+    (26, 'Left baseline wing, long two',  'mid_range', -14.70, 10.30),
+    (27, 'Right baseline wing, long two', 'mid_range',  14.70, 10.30);
 
 -- 6.14.3 Heat-map bands (lower bound inclusive, upper bound exclusive)
 INSERT INTO h_ref.heat_map_bands (zone_code, band_rank, band_label, min_pct, max_pct) VALUES
@@ -625,9 +627,9 @@ INSERT INTO h_ref.physical_tests (test_name, unit, lower_is_better, sort_order) 
 -- Seed self-check: fail the whole file if a count is off.
 DO $$
 BEGIN
-    IF (SELECT count(*) FROM h_ref.court_spots) <> 25
+    IF (SELECT count(*) FROM h_ref.court_spots) <> 27
        OR (SELECT count(*) FROM h_ref.court_spots WHERE zone_code = 'paint') <> 4
-       OR (SELECT count(*) FROM h_ref.court_spots WHERE zone_code = 'mid_range') <> 11
+       OR (SELECT count(*) FROM h_ref.court_spots WHERE zone_code = 'mid_range') <> 13
        OR (SELECT count(*) FROM h_ref.court_spots WHERE zone_code = 'three') <> 10 THEN
         RAISE EXCEPTION 'h_ref seed check failed: court spots';
     END IF;

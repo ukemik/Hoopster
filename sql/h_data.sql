@@ -59,7 +59,7 @@
 -- ├─────┼─────────────────────┼─────────────┼─────────────────────────────────────────────────────────────┤
 -- │ 3   │ sql/h_system.sql    │ hoopster_db │ Users, settings, devices, login attempts, audit stamping    │
 -- ├─────┼─────────────────────┼─────────────┼─────────────────────────────────────────────────────────────┤
--- │ 4   │ sql/h_ref.sql       │ hoopster_db │ Lookup lists, the 25 court spots, heat-map bands            │
+-- │ 4   │ sql/h_ref.sql       │ hoopster_db │ Lookup lists, the 27 court spots, heat-map bands            │
 -- ├─────┼─────────────────────┼─────────────┼─────────────────────────────────────────────────────────────┤
 -- │ 5   │ sql/h_data.sql      │ hoopster_db │ Players, games, practices, shots, drills (44 seeded), goals │
 -- ├─────┼─────────────────────┼─────────────┼─────────────────────────────────────────────────────────────┤
