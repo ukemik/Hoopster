@@ -572,10 +572,10 @@ INSERT INTO h_ref.court_spots (spot_number, spot_name, zone_code, x_ft, y_ft) VA
     ( 2, 'Left block',               'paint',      -6.00,  7.50),
     ( 3, 'Right block',              'paint',       6.00,  7.50),
     ( 4, 'Middle paint (floater)',   'paint',       0.00, 13.00),
-    ( 5, 'Left baseline, long two',  'mid_range', -17.00,  3.00),
-    ( 6, 'Left baseline, short',     'mid_range', -10.50,  3.00),
-    ( 7, 'Right baseline, short',    'mid_range',  10.50,  3.00),
-    ( 8, 'Right baseline, long two', 'mid_range',  17.00,  3.00),
+    ( 5, 'Left baseline, long two',  'mid_range', -17.00,  5.25),
+    ( 6, 'Left baseline, short',     'mid_range', -10.50,  5.25),
+    ( 7, 'Right baseline, short',    'mid_range',  10.50,  5.25),
+    ( 8, 'Right baseline, long two', 'mid_range',  17.00,  5.25),
     ( 9, 'Left wing, mid-range',     'mid_range',  -6.00, 13.70),
     (10, 'Left elbow',               'mid_range',  -6.50, 19.50),
     (11, 'Right elbow',              'mid_range',   6.50, 19.50),
@@ -583,7 +583,7 @@ INSERT INTO h_ref.court_spots (spot_number, spot_name, zone_code, x_ft, y_ft) VA
     (13, 'Left wing, long two',      'mid_range', -12.40, 17.60),
     (14, 'Top of the key',           'mid_range',   0.00, 23.00),
     (15, 'Right wing, long two',     'mid_range',  12.40, 17.60),
-    (16, 'Left corner three',        'three',     -22.00,  3.00),
+    (16, 'Left corner three',        'three',     -22.00,  5.25),
     (17, 'Left short wing three',    'three',     -20.40, 12.70),
     (18, 'Left wing three',          'three',     -15.40, 20.60),
     (19, 'Left top three',           'three',      -8.30, 25.30),
@@ -591,10 +591,10 @@ INSERT INTO h_ref.court_spots (spot_number, spot_name, zone_code, x_ft, y_ft) VA
     (21, 'Right top three',          'three',       8.30, 25.30),
     (22, 'Right wing three',         'three',      15.40, 20.60),
     (23, 'Right short wing three',   'three',      20.40, 12.70),
-    (24, 'Right corner three',       'three',      22.00,  3.00),
+    (24, 'Right corner three',       'three',      22.00,  5.25),
     (25, 'Deep three',               'three',       0.00, 32.00),
-    (26, 'Left baseline wing, long two',  'mid_range', -14.70, 10.30),
-    (27, 'Right baseline wing, long two', 'mid_range',  14.70, 10.30);
+    (26, 'Left baseline wing, long two',  'mid_range', -15.94, 11.84),
+    (27, 'Right baseline wing, long two', 'mid_range',  15.94, 11.84);
 
 -- 6.14.3 Heat-map bands (lower bound inclusive, upper bound exclusive)
 INSERT INTO h_ref.heat_map_bands (zone_code, band_rank, band_label, min_pct, max_pct) VALUES
