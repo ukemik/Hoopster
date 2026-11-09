@@ -467,8 +467,7 @@ TEXT_MIMETYPE = "text/plain"
 X_ROBOTS_TAG = "noindex, nofollow"
 CALLBACK_PATH = "/_dash-update-component"
 
-# Placeholders written to logs instead of the two secret paths (COD-4-05).
-HEALTH_PATH_LOG_TEXT = "[health path]"
+# Placeholders written to logs instead of the secret codes in paths (COD-4-05).
 ENROLL_PATH_LOG_TEXT = "/enroll/[code]"
 # First path segment of an enrollment URL; any path in it is masked in the log.
 ENROLL_PATH_SEGMENT = "enroll"
@@ -541,33 +540,28 @@ def dash_output_ids(output: str) -> set[str]:
     return {part.rsplit(".", 1)[0] for part in trimmed.split("...") if part}
 
 
-def loggable_path(settings: AppSettings) -> str:
+def loggable_path() -> str:
     """
     Description:
-        The current request's path, with the secret health path and the enrollment code
-        replaced by placeholders.
+        The current request's path, with the enrollment and sign-up codes replaced by
+        placeholders.
 
     Parameters:
-        settings: the application settings (for the health path).
+        None.
 
     Return Values:
-        str: "[health path]" for any path that starts with the health path; otherwise
-        "/enroll/[code]" for any path whose first segment is "enroll" (or that matched the
-        enrollment endpoint); otherwise the path unchanged.
+        str: "/enroll/[code]" for any path whose first segment is "enroll" (or that matched the
+        enrollment endpoint); "/join/[code]" likewise for "join"; otherwise the path unchanged.
 
     Notes:
-        The enrollment code and HEALTH_PATH are secrets and never reach the log (COD-4-05).
-        Matching is by prefix, not by exact path or endpoint, so a trailing slash or an extra
-        segment (e.g. /enroll/<code>/ or <health path>/x, which fall to Dash's catch-all
-        route and fail the device check) is masked too. Both sides are compared with repeated
-        leading slashes collapsed, trailing slashes of the health path ignored, and case
-        folded. This masks some paths that merely begin with the secret (e.g. <health path>XYZ
-        or /Enroll); masking too much is the safe side.
+        The codes are secrets and never reach the log (COD-4-05). Matching is by first
+        segment, not by exact path or endpoint, so a trailing slash or an extra segment (e.g.
+        /enroll/<code>/, which falls to Dash's catch-all route and fails the device check) is
+        masked too, compared with repeated leading slashes collapsed and case folded; masking
+        too much is the safe side. The health path masking went with the health page
+        (2026-11-09).
     """
     folded = ("/" + request.path.lstrip("/")).casefold()
-    health_prefix = ("/" + settings.health_path.strip("/")).casefold()
-    if folded.startswith(health_prefix):
-        return HEALTH_PATH_LOG_TEXT
     first_segment = folded.split("/", 2)[1]
     if first_segment == ENROLL_PATH_SEGMENT or request.endpoint == ENROLL_ENDPOINT:
         return ENROLL_PATH_LOG_TEXT
@@ -613,17 +607,17 @@ def _verify_device(settings: AppSettings) -> Response | None:
         request.cookies.get(DEVICE_COOKIE_NAME), settings.device_key_secret
     )
     if raw_key is None:
-        logger.info("No valid device cookie for %s", loggable_path(settings))
+        logger.info("No valid device cookie for %s", loggable_path())
         return plain_not_found()
     try:
         device = get_live_device_by_key_hash(
             data_handler.get_session(), hash_device_key(raw_key)
         )
     except Exception as exc:
-        log_failure(logger, exc, "Device lookup failed for %s", loggable_path(settings))
+        log_failure(logger, exc, "Device lookup failed for %s", loggable_path())
         return plain_not_found()
     if device is None:
-        logger.info("Unknown or revoked device key for %s", loggable_path(settings))
+        logger.info("Unknown or revoked device key for %s", loggable_path())
         return plain_not_found()
 
     device_id = int(device["device_id"])
@@ -657,9 +651,7 @@ def guard_request(settings: AppSettings) -> Response | None:
     Notes:
         Enrollment is exempted by endpoint, never by path prefix: /enroll/a/b falls through
         to Dash's catch-all route and must get the 404. The health page (REQ-046) was removed
-        at the Overseer's request on 2026-11-09: its path now gets the 404 like any other.
-        HEALTH_PATH is still read by the settings and still masked in the log until the
-        settings class is changed (hard stop: approval pending).
+        at the Overseer's request on 2026-11-09, with the HEALTH_PATH setting.
     """
     if request.path == ROBOTS_TXT_PATH:
         return plain_text_response(ROBOTS_TXT_BODY, 200)
@@ -704,7 +696,7 @@ def finish_response(response: Response, settings: AppSettings) -> Response:
     if started is None:
         return response
     elapsed_ms = (time.perf_counter() - started) * MILLISECONDS_PER_SECOND
-    path = loggable_path(settings)
+    path = loggable_path()
     if request.path == CALLBACK_PATH:
         body = request.get_json(silent=True) or {}
         output = body.get("output", "") if isinstance(body, dict) else ""
@@ -841,6 +833,8 @@ ROUTE_SETTINGS_RETENTION = "settings_retention"
 ROUTE_SETTINGS_DEVICES = "settings_devices"
 ROUTE_SETTINGS_ENROLL = "settings_enroll"
 ROUTE_SETTINGS_PASSWORD = "settings_password"
+# My profile: own name, email and password (task 2026-11-09_profile_page).
+ROUTE_SETTINGS_PROFILE = "settings_profile"
 ROUTE_SETTINGS_ABOUT = "settings_about"
 ROUTE_SETTINGS_MANUAL = "settings_manual"
 # The general Import page (task 2026-10-23_drill_import, REQ-050); not player-scoped.
@@ -866,6 +860,7 @@ ROUTES_WITHOUT_PLAYER: frozenset[str] = frozenset(
         ROUTE_SETTINGS_DEVICES,
         ROUTE_SETTINGS_ENROLL,
         ROUTE_SETTINGS_PASSWORD,
+        ROUTE_SETTINGS_PROFILE,
         ROUTE_SETTINGS_ABOUT,
         ROUTE_SETTINGS_MANUAL,
         ROUTE_PLAYERS,
@@ -909,6 +904,7 @@ STATIC_ROUTES: dict[str, str] = {
     "/settings/devices": ROUTE_SETTINGS_DEVICES,
     "/settings/enroll": ROUTE_SETTINGS_ENROLL,
     "/settings/password": ROUTE_SETTINGS_PASSWORD,
+    "/settings/profile": ROUTE_SETTINGS_PROFILE,
     "/settings/about": ROUTE_SETTINGS_ABOUT,
     "/settings/manual": ROUTE_SETTINGS_MANUAL,
     "/import": ROUTE_IMPORT,
@@ -968,7 +964,7 @@ def resolve_route(pathname: str) -> tuple[str, dict[str, str]]:
         "practice_session_id"), practice_run_drill (parameters "practice_session_id" and
         "practice_drill_id"), settings, settings_deleted, settings_export,
         settings_retention, settings_devices, settings_enroll, settings_password,
-        settings_about, settings_manual (task 2026-10-23_settings_hub), import (task
+        settings_profile (task 2026-11-09_profile_page), settings_about, settings_manual (task 2026-10-23_settings_hub), import (task
         2026-10-23_drill_import), goals, goal_new, goal (parameter "goal_id"),
         measurements, measurement (parameter "physical_measurement_id"), physical_tests
         (task 2026-10-23_goals_measurements), not_found.
@@ -1043,7 +1039,7 @@ def route_page(
             "season_edit" (task 2026-10-23_games), "practice_overview", "practice_run",
             "practice_run_drill" (practice_drills 2b), and the Settings routes "settings",
             "settings_deleted", "settings_export", "settings_retention",
-            "settings_devices", "settings_enroll", "settings_password", "settings_about",
+            "settings_devices", "settings_enroll", "settings_password", "settings_profile", "settings_about",
             "settings_manual" (task 2026-10-23_settings_hub), and "import" (task
             2026-10-23_drill_import), and "dashboards" (task 2026-10-23_dashboards; no
             longer a coming-soon page), and "goals", "goal_new", "goal", "measurements",

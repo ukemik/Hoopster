@@ -191,6 +191,8 @@ register_router(
         "settings_devices": controller_security.build_devices_page,
         "settings_enroll": controller_security.build_enroll_page,
         "settings_password": controller_security.build_password_page,
+        # My profile (task 2026-11-09_profile_page; no player needed).
+        "settings_profile": controller_security.build_profile_page,
         "settings_about": controller_settings.build_about_page,
         "settings_manual": controller_settings.build_manual_page,
         # Import page (task 2026-10-23_drill_import; no player needed).
