@@ -45,7 +45,6 @@ built on the reference PC; Part B (Neon + Render) is not yet verified.
 | **Git for Windows** | current | Needed later to push the code to GitHub, from which Render auto-deploys. **Not yet installed on the reference PC** and not needed for Part A today (the project folder is copied, not cloned). |
 | **Neon account** (Part B only) | free tier | PostgreSQL 18 if offered, otherwise 17; region AWS `us-east-1` (US East). |
 | **Render account** (Part B only) | free tier | Web service, region Virginia (US East), auto-deploy from the GitHub `main` branch. |
-| **A free uptime pinger** (Part B only) | any | Calls the health page about every 10 minutes so the service does not sleep; see section 4.5. |
 
 Disk and network: the conda create downloads a few hundred MB (Python, the packages, then the
 Playwright Chromium browser). Expect a few minutes.
@@ -458,7 +457,7 @@ had its data cleared - sees only a plain `Not Found` page on every address.
 | 9 | Playwright browser | `C:\conda_envs\Hoopster_env\python.exe -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); b = p.chromium.launch(); print('chromium', b.version); b.close(); p.stop()"` | `chromium <version>`, no error |
 | 10 | Secrets and read-only URL set | section 3.4 Step 5 | five `True` |
 | 11 | `.env` complete | section 3.4 Step 5 | no `CHANGE_ME` |
-| 12 | Application starts and refuses unknown devices | Start the app (section 3.5 Step 3), wait about 10 seconds, then in a second terminal: `curl.exe -s -o NUL -w "%{http_code}" http://127.0.0.1:8050/` and `curl.exe -s "http://127.0.0.1:8050$env:HEALTH_PATH"` | the first prints `404` (curl sends no device cookie; the body is `Not Found`); the second prints `ok`. A browser that has been enrolled shows the sign-in page at `http://127.0.0.1:8050/` |
+| 12 | Application starts and refuses unknown devices | Start the app (section 3.5 Step 3), wait about 10 seconds, then in a second terminal: `curl.exe -s -o NUL -w "%{http_code}" http://127.0.0.1:8050/` | it prints `404` (curl sends no device cookie; the body is `Not Found`). A browser that has been enrolled shows the sign-in page at `http://127.0.0.1:8050/` |
 
 The project's own test for checks 6 to 10 is `test006_environment.py` in
 `.agent/operations/testing/py/`, run from the project root as
@@ -583,13 +582,12 @@ test credentials `TEST_ENROLLMENT_CODE`, `TEST_PW_PARENT`, `TEST_PW_PLAYER`, whi
 variables, not Render settings); it updates `env.example`, `config/README.md` and this guide
 together.
 
-### 4.5 Uptime pinger
+### 4.5 Uptime pinger (removed)
 
-Register the URL `https://<your-service>.onrender.com` + the value of `HEALTH_PATH` with a free
-uptime pinger, checking about every 10 minutes. The health page never touches the database, so
-Neon's compute can still sleep and its free hours last; only the Render service is kept awake.
-The health page answers `ok` before the device check, needs no cookie, and never opens a
-database connection. *Not yet verified on Render.*
+There is no uptime pinger and no health page (removed 2026-11-09 at the Overseer's request). The
+Render service sleeps after about 15 minutes without visits; the first visit after a break waits
+up to about a minute while it wakes. `HEALTH_PATH` must still be set (the settings still check
+it) until the settings are cleaned up; its value is no longer used.
 
 ### 4.6 Verification checklist (Part B)
 
@@ -599,7 +597,7 @@ database connection. *Not yet verified on Render.*
 | 2 | Seed counts as in section 3.6 check 3 | `27`, `44`, `9`, `1` |
 | 3 | Neon console / SQL Editor still connects after the PUBLIC revoke | works (*not yet verified on Neon*) |
 | 4 | Render build log | `requirements.txt` installed, `gunicorn` present, no `requirements-dev.txt`, no compiler invoked |
-| 5 | `https://<your-service>.onrender.com<HEALTH_PATH>`; also `https://<your-service>.onrender.com/` from a browser never enrolled on prod | the health URL returns `200` with body `ok` and opens no database connection; the plain address returns `404 Not Found` (*not yet verified on Render*) |
+| 5 | `https://<your-service>.onrender.com/` from a browser never enrolled on prod | `404 Not Found` |
 | 6 | On a phone, open `https://<your-service>.onrender.com/enroll/<prod code>`, add the device, sign in | the sign-in page, then Home with the bottom bar; the device cookie is marked `Secure` because `APP_ENV=production` (*not yet verified on Render*) |
 
 ---
