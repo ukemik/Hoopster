@@ -1,6 +1,7 @@
 """Settings access UI for Hoopster: Devices with Revoke, Add a device (one-time enrollment code
-shown as QR code, link and text) and Password & sign-in (REQ-001, REQ-069, REQ-071; task
-2026-10-23_settings_hub).
+shown as QR code, link and text), Password & sign-in (REQ-001, REQ-069, REQ-071; task
+2026-10-23_settings_hub) and My profile (own name, email and password; task
+2026-11-09_profile_page).
 
 Built only through the wrappers of src/layouts.py (COD-5-01). Layout modules import nothing from
 controllers; the callbacks live in src/controller_security.py. The QR code is drawn with segno,
@@ -347,6 +348,89 @@ def _password_input(element_id: str, label: str, autocomplete: str) -> dmc.Passw
     )
 
 
+def change_password_block() -> list[Component]:
+    """
+    Description:
+        The "Change my password" form, shown on My profile and on Password & sign-in.
+
+    Parameters:
+        None.
+
+    Return Values:
+        list[Component]: title, the three password fields, the button and the two messages.
+
+    Notes:
+        Both pages use the same element ids and the one change_password callback; Dash
+        renders only one page at a time, so the ids never clash.
+    """
+    return [
+        dmc.Title("Change my password", order=3),
+        _password_input("password-current", "Current password", "current-password"),
+        _password_input("password-new", "New password (at least 10 characters)", "new-password"),
+        _password_input("password-confirm", "New password again", "new-password"),
+        primary_button("password-change-submit", "Change password"),
+        dmc.Text("", id="password-change-done", c="green"),
+        form_message("password-change-feedback"),
+    ]
+
+
+# Field limits of My profile, equal to ck_users_display_name / ck_users_email and to
+# setup_accounts.MAX_DISPLAY_NAME_LENGTH / controller_access.MAX_EMAIL_LENGTH (layout modules
+# import nothing from controllers, so the values are restated here; the server checks again).
+PROFILE_NAME_MAX_LENGTH = 100
+PROFILE_EMAIL_MAX_LENGTH = 200
+PROFILE_EMAIL_NOTE = (
+    "You sign in with this email. Changing it needs your current password."
+)
+
+
+def profile_layout(account: dict) -> Component:
+    """
+    Description:
+        The My profile page: the signed-in user's name and sign-in email, and Change my
+        password.
+
+    Parameters:
+        account: data_access.get_account of current_user.user_id ("display_name", "email").
+
+    Return Values:
+        Component: the page.
+
+    Notes:
+        The fields start with the saved values. profile-password is needed only when the
+        email changes; it is cleared after every save.
+    """
+    return page_skeleton(
+        "My profile",
+        [
+            settings_back(),
+            dmc.TextInput(
+                id="profile-name",
+                label="Name",
+                value=str(account.get("display_name") or ""),
+                inputProps={"maxLength": PROFILE_NAME_MAX_LENGTH},
+                size=CONTROL_SIZE,
+            ),
+            dmc.TextInput(
+                id="profile-email",
+                label="Email",
+                value=str(account.get("email") or ""),
+                inputProps={"type": "email", "maxLength": PROFILE_EMAIL_MAX_LENGTH},
+                autoComplete="username",
+                size=CONTROL_SIZE,
+            ),
+            dmc.Text(PROFILE_EMAIL_NOTE, size="sm", c="dimmed"),
+            _password_input(
+                "profile-password", "Current password (only to change the email)", "current-password"
+            ),
+            primary_button("profile-save", "Save"),
+            dmc.Text("", id="profile-done", c="green"),
+            form_message("profile-feedback"),
+            *change_password_block(),
+        ],
+    )
+
+
 def password_layout(other_accounts: list[dict]) -> Component:
     """
     Description:
@@ -364,16 +448,7 @@ def password_layout(other_accounts: list[dict]) -> Component:
         one account. The Sign out everywhere dialog is confirm_modal("signout-all"), opened
         and cancelled clientside.
     """
-    children: list[Component] = [
-        settings_back(),
-        dmc.Title("Change my password", order=3),
-        _password_input("password-current", "Current password", "current-password"),
-        _password_input("password-new", "New password (at least 10 characters)", "new-password"),
-        _password_input("password-confirm", "New password again", "new-password"),
-        primary_button("password-change-submit", "Change password"),
-        dmc.Text("", id="password-change-done", c="green"),
-        form_message("password-change-feedback"),
-    ]
+    children: list[Component] = [settings_back(), *change_password_block()]
     if other_accounts:
         options = [
             {"value": str(int(account["user_id"])), "label": str(account["display_name"])}

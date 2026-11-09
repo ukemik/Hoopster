@@ -45,6 +45,8 @@ SETTINGS_GROUPS: tuple[tuple[str, tuple[tuple[str, str, str], ...]], ...] = (
     (
         "Access",
         (
+            # My profile: own name, email and password (task 2026-11-09_profile_page).
+            ("settings-link-profile", "My profile", "/settings/profile"),
             ("settings-link-devices", "Devices", "/settings/devices"),
             ("settings-link-enroll", "Add a device", "/settings/enroll"),
             ("settings-link-password", "Password & sign-in", "/settings/password"),

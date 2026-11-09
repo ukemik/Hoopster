@@ -887,6 +887,42 @@ def set_password_by_user_id(session: Session, user_id: int, password_hash: str) 
     return None if row is None else cast(int, row["session_version"])
 
 
+UPDATE_PROFILE_SQL = """
+UPDATE h_system.users
+SET display_name = :display_name,
+    email = :email
+WHERE user_id = :user_id
+  AND deleted_at IS NULL
+  AND NOT is_system
+RETURNING user_id
+"""
+
+
+def update_profile(session: Session, user_id: int, display_name: str, email: str) -> bool:
+    """
+    Description:
+        Saves the signed-in user's own name and sign-in email (My profile).
+
+    Parameters:
+        session: the write session (inside run_write, acting user = user_id).
+        user_id: current_user.user_id; a user only ever edits their own profile.
+        display_name: the checked name, 1-100 characters.
+        email: the checked email; ux_users_email refuses one another live account uses.
+
+    Return Values:
+        bool: True when the live account was updated, False when no live account has that id.
+
+    Notes:
+        session_version is not bumped: a new name or email does not sign anyone out.
+    """
+    row = fetch_one(
+        session,
+        UPDATE_PROFILE_SQL,
+        {"user_id": user_id, "display_name": display_name, "email": email},
+    )
+    return row is not None
+
+
 def bump_session_version(session: Session, user_id: int) -> int | None:
     """
     Description:

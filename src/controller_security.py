@@ -1,6 +1,6 @@
 """Settings access controller of Hoopster: Devices with Revoke, Add a device (one-time enrollment
-codes and the setup link) and Password & sign-in (REQ-001, REQ-069, REQ-071; task
-2026-10-23_settings_hub, D2-D8).
+codes and the setup link), Password & sign-in (REQ-001, REQ-069, REQ-071; task
+2026-10-23_settings_hub, D2-D8) and My profile (own name and email; task 2026-11-09_profile_page).
 
 Identifiers (Context Adaptation Table, COD-8-01): the device to revoke comes only from the
 devices-revoke-id store written by open_revoke, never flask.g.device_id (used only for the
@@ -52,12 +52,15 @@ from src.data_access import (
     bump_session_version,
     cancel_open_enrollment_codes,
     disable_setup_enrollment,
+    get_account,
     get_enrollment_status,
+    get_login_user_by_email,
     insert_enrollment_code,
     list_devices,
     list_other_accounts,
     revoke_device,
     set_password_by_user_id,
+    update_profile,
 )
 from src.layouts_entry import format_entry_datetime
 from src.layouts_security import (
@@ -67,8 +70,9 @@ from src.layouts_security import (
     enroll_result,
     enroll_status_items,
     password_layout,
+    profile_layout,
 )
-from src.setup_accounts import password_problem
+from src.setup_accounts import display_name_problem, email_problem, password_problem
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +107,14 @@ MESSAGE_CHOOSE_ACCOUNT = "Choose an account."
 MESSAGE_RESET_DONE = "{name}'s password was reset. {name} is signed out on every device."
 MESSAGE_RESET_FAILED = "Could not reset the password. Reference: {ref}"
 MESSAGE_SIGNOUT_FAILED = "Could not sign out everywhere. Reference: {ref}"
+
+# My profile (2026-11-09_profile_page).
+MESSAGE_PROFILE_SAVED = "Saved."
+MESSAGE_PROFILE_SAVED_EMAIL = "Saved. Sign in with {email} from now on."
+MESSAGE_PROFILE_UNCHANGED = "Nothing to save: the name and email are unchanged."
+MESSAGE_EMAIL_TAKEN = "Another account already uses that email."
+MESSAGE_PROFILE_FAILED = "Could not save the profile. Reference: {ref}"
+EMAIL_UNIQUE_INDEX = "ux_users_email"
 
 
 # --- Pure helpers ---
@@ -268,6 +280,31 @@ def build_password_page(
     """
     others = list_other_accounts(data_handler.get_session(), current_user.user_id)
     return password_layout(others)
+
+
+def build_profile_page(
+    player_id: int | None, clock: DeviceClock, params: dict[str, str]
+) -> Component:
+    """
+    Description:
+        Builds My profile: the signed-in user's own name and email, and Change my password.
+
+    Parameters:
+        player_id: the selected player (unused).
+        clock: the device clock (unused).
+        params: the route parameters (none).
+
+    Return Values:
+        Component: the page.
+
+    Notes:
+        The account is always current_user.user_id (Context Adaptation Table). Exceptions,
+        and a signed-in account that is no longer live, propagate to the router's error page.
+    """
+    account = get_account(data_handler.get_session(), current_user.user_id)
+    if account is None:
+        raise LookupError(f"account {current_user.user_id} is not live")
+    return profile_layout(account)
 
 
 # --- Devices callbacks (REQ-071, D8) ---
@@ -726,6 +763,81 @@ def change_password(
     return MESSAGE_PASSWORD_CHANGED, "", *cleared
 
 
+def save_profile(
+    n_clicks: int | None,
+    name: str | None,
+    email: str | None,
+    password: str | None,
+    settings: AppSettings,
+) -> tuple[str, str, str]:
+    """
+    Description:
+        Save on My profile: checks and stores the signed-in user's own name and email. A new
+        email (other than a change of letter case) needs the current password.
+
+    Parameters:
+        n_clicks: profile-save.n_clicks.
+        name: profile-name.value.
+        email: profile-email.value.
+        password: profile-password.value. Never logged.
+        settings: the application settings (lockout thresholds of the password check).
+
+    Return Values:
+        tuple[str, str, str]: profile-done text, profile-feedback text and profile-password
+        value (always "").
+
+    Notes:
+        A boundary (COD-4-04). The account is current_user.user_id only. A taken email is
+        refused before the write (case-insensitive) and again by ux_users_email if two saves
+        race. The session is not bumped; the new name shows on the next page.
+    """
+    if not n_clicks:
+        raise PreventUpdate
+    new_name = (name or "").strip()
+    new_email = (email or "").strip()
+    problem = display_name_problem(new_name) or email_problem(new_email, None)
+    if problem is not None:
+        return "", problem, CLEARED
+    user_id: int = current_user.user_id
+    try:
+        session = data_handler.get_session()
+        account = get_account(session, user_id)
+        if account is None:
+            raise LookupError(f"account {user_id} is not live")
+        old_email = str(account["email"])
+        email_changed = new_email.lower() != old_email.lower()
+        if new_name == str(account["display_name"]) and new_email == old_email:
+            return "", MESSAGE_PROFILE_UNCHANGED, CLEARED
+        if email_changed:
+            other = get_login_user_by_email(session, new_email)
+            if other is not None and other["user_id"] != user_id:
+                return "", MESSAGE_EMAIL_TAKEN, CLEARED
+    except Exception as exc:
+        ref = new_reference_code()
+        log_failure(logger, exc, "Profile read failed (ref %s)", ref)
+        return "", MESSAGE_PROFILE_FAILED.format(ref=ref), CLEARED
+    if email_changed:
+        problem = verify_current_password(user_id, password, settings)
+        if problem is not None:
+            return "", problem, CLEARED
+    result, reason = run_write_with_reason(
+        user_id,
+        lambda write_session: update_profile(write_session, user_id, new_name, new_email),
+        "save profile",
+        {EMAIL_UNIQUE_INDEX: MESSAGE_EMAIL_TAKEN},
+    )
+    if not result.ok:
+        return "", reason or MESSAGE_PROFILE_FAILED.format(ref=result.ref), CLEARED
+    if not result.value:
+        ref = new_reference_code()
+        logger.error("Save profile refused: no live account %s (ref %s)", user_id, ref)
+        return "", MESSAGE_PROFILE_FAILED.format(ref=ref), CLEARED
+    logger.info("User %s saved their profile (email changed: %s)", user_id, email_changed)
+    if email_changed:
+        return MESSAGE_PROFILE_SAVED_EMAIL.format(email=new_email), "", CLEARED
+    return MESSAGE_PROFILE_SAVED, "", CLEARED
+
+
 def _other_account(account_value: object) -> dict[str, object] | None:
     """
     Description:
@@ -978,7 +1090,8 @@ def _register_enroll(app: Dash, settings: AppSettings) -> None:
 def _register_password(app: Dash, settings: AppSettings) -> None:
     """
     Description:
-        Registers the Password & sign-in callbacks.
+        Registers the Password & sign-in callbacks (Change my password, Reset, Sign out
+        everywhere) and the My profile Save callback.
 
     Parameters:
         app: the Dash application.
@@ -988,7 +1101,8 @@ def _register_password(app: Dash, settings: AppSettings) -> None:
         None.
 
     Notes:
-        auth-state lives in the shell and is written by other callbacks, so
+        Change my password serves both Password & sign-in and My profile (same element ids,
+        change_password_block). auth-state lives in the shell and is written by other callbacks, so
         sign_out_everywhere uses allow_duplicate and ignores runs without a click.
     """
 
@@ -1039,6 +1153,27 @@ def _register_password(app: Dash, settings: AppSettings) -> None:
         """
         return reset_other_password(n_clicks, account_value, mine, new, confirm, settings)
 
+    def save_profile_callback(
+        n_clicks: int | None, name: str | None, email: str | None, password: str | None
+    ) -> tuple[str, str, str]:
+        """
+        Description:
+            Dash wrapper of save_profile with the settings.
+
+        Parameters:
+            n_clicks: profile-save.n_clicks.
+            name: profile-name.value.
+            email: profile-email.value.
+            password: profile-password.value. Never logged.
+
+        Return Values:
+            tuple[str, str, str]: see save_profile.
+
+        Notes:
+            None.
+        """
+        return save_profile(n_clicks, name, email, password, settings)
+
     app.callback(
         Output("password-change-done", "children"),
         Output("password-change-feedback", "children"),
@@ -1065,6 +1200,17 @@ def _register_password(app: Dash, settings: AppSettings) -> None:
         State("password-reset-confirm", "value"),
         prevent_initial_call=True,
     )(reset_other_password_callback)
+
+    app.callback(
+        Output("profile-done", "children"),
+        Output("profile-feedback", "children"),
+        Output("profile-password", "value"),
+        Input("profile-save", "n_clicks"),
+        State("profile-name", "value"),
+        State("profile-email", "value"),
+        State("profile-password", "value"),
+        prevent_initial_call=True,
+    )(save_profile_callback)
 
     app.clientside_callback(
         ClientsideFunction("hoopster", "open_drawer"),
