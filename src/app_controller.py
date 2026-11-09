@@ -1,6 +1,6 @@
 """Request pipeline, device-key crypto, router and the single commit helper of Hoopster.
 
-REQ-002 (nothing without sign-in), REQ-046 (secret no-database health page), REQ-055 (device
+REQ-002 (nothing without sign-in), REQ-055 (device
 clock), REQ-066 (bottom bar), REQ-068 (request timing), REQ-069 (device key before anything
 else). run_write is the only place in the code base where a transaction is committed
 (COD-6-01). This module imports no controller_* module: main.py passes the page builders to
@@ -457,11 +457,10 @@ def read_device_key(cookie_value: str | None, secret: str) -> str | None:
     return payload
 
 
-# --- Request pipeline (REQ-002, REQ-046, REQ-068, REQ-069; plan §3.2) ---
+# --- Request pipeline (REQ-002, REQ-068, REQ-069; plan §3.2) ---
 
 ROBOTS_TXT_PATH = "/robots.txt"
 ROBOTS_TXT_BODY = "User-agent: *\nDisallow: /\n"
-HEALTH_BODY = "ok"
 NOT_FOUND_BODY = "Not Found"
 UNAUTHORIZED_BODY = "Unauthorized"
 TEXT_MIMETYPE = "text/plain"
@@ -645,25 +644,23 @@ def _verify_device(settings: AppSettings) -> Response | None:
 def guard_request(settings: AppSettings) -> Response | None:
     """
     Description:
-        before_request hook body (plan §3.2): the exact-path exemptions (health page,
-        robots.txt, the enrollment and sign-up endpoints), then the device check, then the signed-out
-        callback guard.
+        before_request hook body (plan §3.2): the exemptions (robots.txt, the enrollment and
+        sign-up endpoints), then the device check, then the signed-out callback guard.
 
     Parameters:
         settings: the application settings.
 
     Return Values:
-        Response | None: a response that ends the request (health, robots, 404, 401), or
-        None to let the request continue.
+        Response | None: a response that ends the request (robots, 404, 401), or None to let
+        the request continue.
 
     Notes:
         Enrollment is exempted by endpoint, never by path prefix: /enroll/a/b falls through
-        to Dash's catch-all route and must get the 404.
+        to Dash's catch-all route and must get the 404. The health page (REQ-046) was removed
+        at the Overseer's request on 2026-11-09: its path now gets the 404 like any other.
+        HEALTH_PATH is still read by the settings and still masked in the log until the
+        settings class is changed (hard stop: approval pending).
     """
-    if request.path == settings.health_path:
-        response = plain_text_response(HEALTH_BODY, 200)
-        response.headers["Cache-Control"] = "no-store"
-        return response
     if request.path == ROBOTS_TXT_PATH:
         return plain_text_response(ROBOTS_TXT_BODY, 200)
     if request.endpoint in (ENROLL_ENDPOINT, JOIN_ENDPOINT):
