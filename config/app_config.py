@@ -227,11 +227,9 @@ NAV_ITEMS: tuple[tuple[str, str], ...] = (
 
 # --- Configuration contract: names, defaults and validation rules ---
 
-SECRET_VARIABLES: tuple[str, ...] = ("DATABASE_URL", "SECRET_KEY", "DEVICE_KEY_SECRET", "HEALTH_PATH")
+SECRET_VARIABLES: tuple[str, ...] = ("DATABASE_URL", "SECRET_KEY", "DEVICE_KEY_SECRET")
 
 DATABASE_URL_PREFIX = "postgresql+psycopg://"
-HEALTH_PATH_MIN_LENGTH = 16
-HEALTH_PATH_PATTERN = r"^[A-Za-z0-9_/-]+$"
 
 APP_ENV_DEVELOPMENT = "development"
 APP_ENV_PRODUCTION = "production"
@@ -266,7 +264,6 @@ class AppSettings:
         database_url: SQLAlchemy URL of role hoopster_app (secret).
         secret_key: Flask session and remember-me signing key (secret).
         device_key_secret: device-key cookie signing key (secret).
-        health_path: secret path of the no-database health page (secret).
         app_env: "development" or "production".
         login_max_failures: failures that lock a device + email pair (REQ-070).
         login_window_minutes: window the failures must fall within (REQ-070).
@@ -279,14 +276,13 @@ class AppSettings:
         Not applicable (data class).
 
     Notes:
-        The four secret fields are excluded from repr, but never log their values directly.
+        The three secret fields are excluded from repr, but never log their values directly.
     """
 
-    # repr=False keeps the four secrets out of any accidental log of the object (COD-4-05).
+    # repr=False keeps the three secrets out of any accidental log of the object (COD-4-05).
     database_url: str = field(repr=False)
     secret_key: str = field(repr=False)
     device_key_secret: str = field(repr=False)
-    health_path: str = field(repr=False)
     app_env: str
     login_max_failures: int
     login_window_minutes: int
@@ -384,33 +380,10 @@ def _parse_int_in_range(name: str, raw: str, minimum: int, maximum: int | None) 
     return value
 
 
-def _validate_health_path(health_path: str) -> None:
-    """
-    Description:
-        Checks the shape of HEALTH_PATH: a leading slash, a minimum length, and only URL-safe
-        characters.
-
-    Parameters:
-        health_path: the HEALTH_PATH value.
-
-    Return Values:
-        None. Raises ValueError naming HEALTH_PATH when a rule fails.
-
-    Notes:
-        None.
-    """
-    if not health_path.startswith("/"):
-        raise ValueError("HEALTH_PATH must start with /")
-    if len(health_path) < HEALTH_PATH_MIN_LENGTH:
-        raise ValueError(f"HEALTH_PATH must be at least {HEALTH_PATH_MIN_LENGTH} characters long")
-    if not re.fullmatch(HEALTH_PATH_PATTERN, health_path):
-        raise ValueError("HEALTH_PATH may contain only letters, digits, _, / and -")
-
-
 def load_settings(environ: Mapping[str, str]) -> AppSettings:
     """
     Description:
-        Reads and validates the eleven configuration variables of config/README.md and
+        Reads and validates the ten configuration variables of config/README.md and
         returns them as one immutable settings object.
 
     Parameters:
@@ -422,16 +395,15 @@ def load_settings(environ: Mapping[str, str]) -> AppSettings:
     Notes:
         Raises ValueError whose message starts with the variable name and never contains a
         value. The seven non-secrets fall back to their documented defaults when unset or
-        blank; the four secrets are required.
+        blank; the three secrets are required. HEALTH_PATH is no longer read (health page
+        removed 2026-11-09); a leftover value in the environment is ignored.
     """
     database_url = _read_secret(environ, "DATABASE_URL")
     secret_key = _read_secret(environ, "SECRET_KEY")
     device_key_secret = _read_secret(environ, "DEVICE_KEY_SECRET")
-    health_path = _read_secret(environ, "HEALTH_PATH")
 
     if not database_url.startswith(DATABASE_URL_PREFIX):
         raise ValueError(f"DATABASE_URL must start with {DATABASE_URL_PREFIX}")
-    _validate_health_path(health_path)
     if secret_key == device_key_secret:
         raise ValueError("SECRET_KEY and DEVICE_KEY_SECRET must be different")
 
@@ -474,7 +446,6 @@ def load_settings(environ: Mapping[str, str]) -> AppSettings:
         database_url=database_url,
         secret_key=secret_key,
         device_key_secret=device_key_secret,
-        health_path=health_path,
         app_env=app_env,
         login_max_failures=login_max_failures,
         login_window_minutes=login_window_minutes,

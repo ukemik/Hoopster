@@ -244,30 +244,27 @@ because Flask's `__version__` attribute is deprecated.
 
 ### 3.4 Configuration
 
-The application reads eleven variables from the process environment; the contract (meaning,
+The application reads ten variables from the process environment; the contract (meaning,
 defaults, sources) is `config/README.md`. On the PC they come from two places, decided at Gate 1
 of task `2026-10-17_dev_environment`:
 
-- **Four secrets are Windows user environment variables**, never a file inside the project
-  folder (the folder is cloud-synced): `DATABASE_URL`, `SECRET_KEY`, `DEVICE_KEY_SECRET`,
-  `HEALTH_PATH`.
+- **Three secrets are Windows user environment variables**, never a file inside the project
+  folder (the folder is cloud-synced): `DATABASE_URL`, `SECRET_KEY`, `DEVICE_KEY_SECRET`.
 - **Seven non-secret settings live in `.env`** at the project root (git-excluded): `APP_ENV`,
   `LOGIN_MAX_FAILURES`, `LOGIN_WINDOW_MINUTES`, `LOGIN_LOCK_MINUTES`, `LOG_LEVEL`,
   `LOG_TIMINGS`, `PORT`. `python-dotenv` loads `.env` without overriding a variable that already
   exists in the environment, so any of these may also be set as a user variable instead.
 
-**Step 1 - generate the three random values** with the environment's interpreter (each line
+**Step 1 - generate the two random values** with the environment's interpreter (each line
 prints one value; keep the output private):
 
 ```powershell
 C:\conda_envs\Hoopster_env\python.exe -c "import secrets; print(secrets.token_hex(32))"
 C:\conda_envs\Hoopster_env\python.exe -c "import secrets; print(secrets.token_hex(32))"
-C:\conda_envs\Hoopster_env\python.exe -c "import secrets; print('/health-' + secrets.token_urlsafe(24))"
 ```
 
-**Step 2 - set the four secrets as user environment variables.** Paste the first value as
-`SECRET_KEY`, the second as `DEVICE_KEY_SECRET` (they must differ), the third as `HEALTH_PATH`
-(it must start with `/`). `DATABASE_URL` is the SQLAlchemy URL for role `hoopster_app` with the
+**Step 2 - set the three secrets as user environment variables.** Paste the first value as
+`SECRET_KEY` and the second as `DEVICE_KEY_SECRET` (they must differ). `DATABASE_URL` is the SQLAlchemy URL for role `hoopster_app` with the
 password you set in section 3.2 Step 2; percent-encode reserved characters in the password
 (`@` -> `%40`, `:` -> `%3A`, `/` -> `%2F`, `#` -> `%23`, `?` -> `%3F`, `%` -> `%25`):
 
@@ -275,7 +272,6 @@ password you set in section 3.2 Step 2; percent-encode reserved characters in th
 [Environment]::SetEnvironmentVariable('DATABASE_URL', 'postgresql+psycopg://hoopster_app:<SET_PASSWORD>@localhost:5432/hoopster_db', 'User')
 [Environment]::SetEnvironmentVariable('SECRET_KEY', '<value>', 'User')
 [Environment]::SetEnvironmentVariable('DEVICE_KEY_SECRET', '<value>', 'User')
-[Environment]::SetEnvironmentVariable('HEALTH_PATH', '/health-<value>', 'User')
 ```
 
 A newly set user variable is visible only to shells and processes started afterwards: open a
@@ -299,24 +295,24 @@ leading dot; the template is tracked, `.env` is not) and keep only the non-secre
 Copy-Item env.example .env
 ```
 
-Then open `.env` in an editor and **delete the four secret lines** (`DATABASE_URL=...`,
-`SECRET_KEY=...`, `DEVICE_KEY_SECRET=...`, `HEALTH_PATH=...`); the seven remaining values are
+Then open `.env` in an editor and **delete the three secret lines** (`DATABASE_URL=...`,
+`SECRET_KEY=...`, `DEVICE_KEY_SECRET=...`); the seven remaining values are
 the development defaults and need no change. Equivalent one-liner that writes only the non-secret
 lines (ASCII encoding, so PowerShell 5.1 cannot garble it):
 
 ```powershell
-Get-Content env.example | Where-Object { $_ -notmatch '^(DATABASE_URL|SECRET_KEY|DEVICE_KEY_SECRET|HEALTH_PATH)=' } | Set-Content -Encoding ascii .env
+Get-Content env.example | Where-Object { $_ -notmatch '^(DATABASE_URL|SECRET_KEY|DEVICE_KEY_SECRET)=' } | Set-Content -Encoding ascii .env
 ```
 
-**Step 5 - confirm, without printing any value**, that the five user variables exist and that no
+**Step 5 - confirm, without printing any value**, that the four user variables exist and that no
 placeholder is left in `.env`:
 
 ```powershell
-foreach ($n in 'DATABASE_URL','SECRET_KEY','DEVICE_KEY_SECRET','HEALTH_PATH','HOOPSTER_RO_DATABASE_URL') { "$n set: $([bool][Environment]::GetEnvironmentVariable($n, 'User'))" }
+foreach ($n in 'DATABASE_URL','SECRET_KEY','DEVICE_KEY_SECRET','HOOPSTER_RO_DATABASE_URL') { "$n set: $([bool][Environment]::GetEnvironmentVariable($n, 'User'))" }
 Select-String -Path .env -Pattern 'CHANGE_ME'
 ```
 
-Expected: five `True` lines and no output from `Select-String`.
+Expected: four `True` lines and no output from `Select-String`.
 
 **Step 6 (optional) - variables for running the project's tests.** Only needed where the
 project's browser tests run, and only after section 3.5 Step 2, because they hold values you
@@ -570,13 +566,12 @@ on Render and nothing is read from a file:
 | `DATABASE_URL` | `postgresql+psycopg://hoopster_app:<SET_PASSWORD>@<neon-host>/hoopster_db?sslmode=require` (the Neon host and the `hoopster_app` password set in section 4.2; percent-encode reserved characters) |
 | `SECRET_KEY` | a fresh `secrets.token_hex(32)` value (not the PC's) |
 | `DEVICE_KEY_SECRET` | a fresh `secrets.token_hex(32)` value, different from `SECRET_KEY` |
-| `HEALTH_PATH` | a fresh `/health-` + `secrets.token_urlsafe(24)` value; the pinger calls it |
 | `LOGIN_MAX_FAILURES`, `LOGIN_WINDOW_MINUTES`, `LOGIN_LOCK_MINUTES` | `5`, `15`, `15` (or your own thresholds) |
 | `LOG_LEVEL` | `INFO` |
 | `LOG_TIMINGS` | `false` |
 | `PORT` | **supplied by Render itself**; do not set it |
 
-Generate the three random values on the PC exactly as in section 3.4 Step 1 and paste them into
+Generate the two random values on the PC exactly as in section 3.4 Step 1 and paste them into
 the Render dashboard; they go nowhere else. A later task may append variables (for example the
 test credentials `TEST_ENROLLMENT_CODE`, `TEST_PW_PARENT`, `TEST_PW_PLAYER`, which are local user
 variables, not Render settings); it updates `env.example`, `config/README.md` and this guide
@@ -586,8 +581,9 @@ together.
 
 There is no uptime pinger and no health page (removed 2026-11-09 at the Overseer's request). The
 Render service sleeps after about 15 minutes without visits; the first visit after a break waits
-up to about a minute while it wakes. `HEALTH_PATH` must still be set (the settings still check
-it) until the settings are cleaned up; its value is no longer used.
+up to about a minute while it wakes. The `HEALTH_PATH` setting was removed too; delete it from
+Render's environment and from the PC's user variables if it is still there (a leftover value is
+ignored).
 
 ### 4.6 Verification checklist (Part B)
 

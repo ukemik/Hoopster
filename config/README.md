@@ -24,7 +24,6 @@ from two places, decided at Gate 1 of task `2026-10-17_dev_environment` (2026-10
 | `DATABASE_URL` | user environment variable (secret) | SQLAlchemy URL for role `hoopster_app` (REQ-048) | `postgresql+psycopg://hoopster_app:<password>@localhost:5432/hoopster_db` (Neon: append `?sslmode=require`); percent-encode reserved characters in the password |
 | `SECRET_KEY` | user environment variable (secret) | Signs the Flask session and the remember-me cookie (REQ-001) | 64 hex characters from `secrets.token_hex(32)` |
 | `DEVICE_KEY_SECRET` | user environment variable (secret) | Signs the device-key cookie (REQ-069); separate so each key can be rotated alone | 64 hex characters, different from `SECRET_KEY` |
-| `HEALTH_PATH` | user environment variable (secret) | Secret path of the no-database health page the uptime pinger calls (REQ-046) | `/health-<random>`, suffix from `secrets.token_urlsafe(24)`; must start with `/` |
 | `APP_ENV` | `.env` | `development` or `production`. `production` sets the Secure flag on the session, remember-me and device cookies; `development` leaves it off so a phone can use plain http on the local network. Debug mode and hot reload are never enabled (REQ-047, REQ-067) | `development` |
 | `LOGIN_MAX_FAILURES` | `.env` | Failures that lock a device + email pair (REQ-070) | `5` |
 | `LOGIN_WINDOW_MINUTES` | `.env` | Window the failures must fall within (REQ-070) | `15` |
@@ -37,18 +36,18 @@ The three `LOGIN_*` values are the `p_max_failures`, `p_window_minutes` and `p_l
 arguments of `h_system.fn_login_lockout_status` (reuse; no database change).
 
 How `load_settings` applies the table (once, at startup of the app and of the setup script):
-- The four secrets are required; a missing or blank secret stops startup.
+- The three secrets are required; a missing or blank secret stops startup. (`HEALTH_PATH` was
+  removed on 2026-11-09 with the health page; a leftover value is ignored and can be deleted.)
 - A non-secret variable that is unset **or blank** takes the default in the table.
-- Values are checked: `DATABASE_URL` starts with `postgresql+psycopg://`; `HEALTH_PATH` starts
-  with `/`, is at least 16 characters and uses only letters, digits, `_`, `/` and `-`;
+- Values are checked: `DATABASE_URL` starts with `postgresql+psycopg://`;
   `SECRET_KEY` differs from `DEVICE_KEY_SECRET`; the `LOGIN_*` values are whole numbers of at
   least 1; `LOG_LEVEL` is one of the four names **in upper case**; `LOG_TIMINGS` is `true` or
   `false` in any case; `PORT` is 1 to 65535.
 - A failed check stops startup with a message that names the variable, never its value.
-  `AppSettings` keeps the four secrets out of its repr.
+  `AppSettings` keeps the three secrets out of its repr.
 
 Rules:
-- **The four secrets never appear in any file inside the project**: not in `.env`, not in a test
+- **The three secrets never appear in any file inside the project**: not in `.env`, not in a test
   script, not in a brief. Agents never open, print or copy `.env` or any secret value
   (`COD-14-01`, `COD-4-05`, `COD-11.4-01`); they check that a variable is present, never what it
   holds.

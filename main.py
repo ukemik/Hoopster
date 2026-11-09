@@ -54,8 +54,8 @@ from src.layouts import app_shell
 
 logger = logging.getLogger(__name__)
 
-# The Werkzeug development server writes every request line, including the secret health
-# path and /enroll/<code>, at INFO. Only its warnings and errors are kept (COD-4-05).
+# The Werkzeug development server writes every request line, including /enroll/<code> and
+# /join/<code>, at INFO. Only its warnings and errors are kept (COD-4-05).
 WERKZEUG_LOGGER_NAME = "werkzeug"
 
 # REQ-059: Dash 4.4.1's default page template plus the manifest link. crossorigin
