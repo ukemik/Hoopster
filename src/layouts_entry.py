@@ -80,6 +80,17 @@ COURT_CLASS = "hoopster-court"
 COURT_GRAPH_CLASS = "hoopster-court-graph"
 
 COURT_SELECT_PROMPT = "Tap a spot on the court"
+# The Free throws checkbox (task 2026-11-09_android_app, Overseer 2026-11-10): when ticked,
+# Make / Miss and the X of Y / No spot forms record free throws and the court shows only a
+# display-only spot behind the free-throw line. Label and figure key duplicated in
+# assets/hoopster.js (FT_MODE_LABEL, FIGURE_FT); keep them equal.
+FT_MODE_CHECKBOX_LABEL = "Free throws"
+FT_MODE_LABEL = "Free-throw line"
+FIGURE_FT = "ft"
+FT_SPOT_TEXT = "FT"
+# Just behind the line, where the shooter stands (the line is at y = 19 ft).
+FT_SPOT_OFFSET_FT = 1.0
+FT_SPOT_EXTRA_SIZE_PX = 6
 # The court Undo removes the last entry of either kind, field goal or free throw (REQ-010).
 UNDO_LABEL = "Undo last entry"
 RETRY_HIDDEN_STYLE: dict[str, str] = {"display": "none"}
@@ -294,6 +305,45 @@ def _full_court_shapes() -> list[dict[str, object]]:
 
 
 # --- Court figure (REQ-007, REQ-008, REQ-009) ---
+
+def build_ft_figure() -> go.Figure:
+    """
+    Description:
+        The half court of Free throws mode: the painted lines and one display-only marker
+        "FT" just behind the free-throw line, in the selected colour.
+
+    Parameters:
+        None.
+
+    Return Values:
+        go.Figure: the figure, laid out exactly like build_court_figure's half court.
+
+    Notes:
+        Pure. The marker has no customdata and no meta spots, so a tap on it selects
+        nothing (select_spot also ignores taps while Free throws is ticked). Free throws
+        are stored without a spot, as before (no database change).
+    """
+    figure = build_court_figure([], COURT_VIEW_HALF)
+    figure.data = []
+    figure.add_trace(
+        go.Scatter(
+            x=[0.0],
+            y=[FREE_THROW_LINE_Y_FT + FT_SPOT_OFFSET_FT],
+            mode="markers+text",
+            text=[FT_SPOT_TEXT],
+            textposition="middle center",
+            textfont={"color": "#ffffff", "size": SPOT_LABEL_FONT_SIZE_PX},
+            marker={
+                "size": SPOT_MARKER_SIZE_PX + FT_SPOT_EXTRA_SIZE_PX,
+                "color": SPOT_SELECTED_COLOR,
+                "line": {"color": "#ffffff", "width": SPOT_OUTLINE_WIDTH_PX},
+            },
+            hoverinfo="none",
+            meta={"spots": []},
+        )
+    )
+    return figure
+
 
 def build_court_figure(spots: list[dict], view: str = COURT_VIEW_HALF) -> go.Figure:
     """
@@ -1038,13 +1088,18 @@ def entry_panel(
         (court-ft-area) is hidden unless the version has a free-throw-line spot; Entries is
         hidden (free-form entries only); the first plan spot below its target is
         pre-selected. Without drill the panel is unchanged apart from the hidden drill
-        sub-panel and the court-ft-area wrapper.
+        sub-panel and the court-ft-area wrapper. Free throws (2026-11-10): the checkbox
+        court-ft-mode (in court-ft-mode-area, hidden in a drill without a free-throw-line
+        spot) switches Make / Miss and the X of Y / No spot forms to free throws and shows
+        court-figures["ft"]; court-ft-area (FT Make / FT Miss and the FT totals form) is
+        always hidden.
     """
     default_totals = totals.get(str(default_player_id), EMPTY_TOTALS)
     half_figure = build_court_figure(spots, COURT_VIEW_HALF)
     figures = {
         COURT_VIEW_HALF: half_figure.to_dict(),
         COURT_VIEW_FULL: build_court_figure(spots, COURT_VIEW_FULL).to_dict(),
+        FIGURE_FT: build_ft_figure().to_dict(),
     }
     selected_spot = _preselected_spot(spots, drill.get("selected_spot")) if drill else None
     selected_label = COURT_SELECT_PROMPT
@@ -1098,6 +1153,18 @@ def entry_panel(
             id="court-graph-wrap",
             className=COURT_CLASS,
         ),
+        # Free throws mode (Overseer 2026-11-10): shown wherever free throws are entered.
+        html.Div(
+            dmc.Checkbox(
+                id="court-ft-mode",
+                label=FT_MODE_CHECKBOX_LABEL,
+                checked=False,
+                size=CONTROL_SIZE,
+                className="hoopster-check",
+            ),
+            id="court-ft-mode-area",
+            className="" if show_free_throws else HIDDEN_CLASS,
+        ),
         dmc.Text(selected_label, id="court-selected-label"),
         _drill_panel(drill, default_player_id),
         *_shot_panels(selected_spot is not None),
@@ -1112,10 +1179,12 @@ def entry_panel(
             ]
         ),
         _details_area(shot_types),
+        # The old free-throw counter stays in the page, always hidden, so its ids and
+        # callbacks keep working; the Free throws checkbox replaced it (2026-11-10).
         html.Div(
             dmc.Stack(_free_throw_section(default_totals)),
             id="court-ft-area",
-            className="" if show_free_throws else HIDDEN_CLASS,
+            className=HIDDEN_CLASS,
         ),
         entries_button,
         *entry_dialogs(),

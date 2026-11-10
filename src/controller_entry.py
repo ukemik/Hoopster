@@ -1210,6 +1210,27 @@ def _register_court_callbacks(app: Dash) -> None:
         State("court-player", "value"),
         State("court-confirmed", "data"),
         State("court-attempt-request", "data"),
+        State("court-ft-mode", "checked"),
+        # The drill run, so the app's buzzes are once per drill and attempt (review_2 R2-F1).
+        State("entry-parent", "data"),
+        prevent_initial_call=True,
+    )
+
+    # Free throws checkbox (task 2026-11-09_android_app, 2026-11-10): swaps the court for the
+    # free-throw-line figure and enables Make / Miss; unticked, restores the spot court.
+    app.clientside_callback(
+        ClientsideFunction("hoopster", "ft_mode_view"),
+        Output("court-graph", "figure", allow_duplicate=True),
+        Output("court-selected-label", "children", allow_duplicate=True),
+        Output("court-make", "disabled", allow_duplicate=True),
+        Output("court-miss", "disabled", allow_duplicate=True),
+        Output("court-graph-wrap", "className", allow_duplicate=True),
+        Input("court-ft-mode", "checked"),
+        State("court-figures", "data"),
+        State("court-view", "value"),
+        State("court-selected-spot", "data"),
+        # The label before ticking, so "All spots done" comes back on untick (review_2 R2-F4).
+        State("court-selected-label", "children"),
         prevent_initial_call=True,
     )
 
@@ -1243,6 +1264,7 @@ def _register_court_callbacks(app: Dash) -> None:
         State("court-attempt-request", "data"),
         State("court-drill-side", "value"),
         State("court-base", "data"),
+        State("court-ft-mode", "checked"),
         prevent_initial_call=True,
     )
 
@@ -1264,6 +1286,7 @@ def _register_court_callbacks(app: Dash) -> None:
         Input("court-player", "value"),
         Input("court-attempt-request", "data"),
         Input("court-undo-note", "data"),
+        Input("court-ft-mode", "checked"),
     )
 
     app.callback(
@@ -1282,6 +1305,7 @@ def _register_court_callbacks(app: Dash) -> None:
         Output("court-ft-single-panel", "className"),
         Output("court-ft-cumulative-panel", "className"),
         Input("court-mode", "value"),
+        Input("court-ft-mode", "checked"),
     )
 
     app.clientside_callback(
@@ -1310,6 +1334,7 @@ def _register_court_callbacks(app: Dash) -> None:
         State("court-detail-creation", "value"),
         State("court-detail-defense", "value"),
         State("court-player", "value"),
+        State("court-ft-mode", "checked"),
         prevent_initial_call=True,
     )
 

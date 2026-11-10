@@ -38,6 +38,10 @@ SEGMENTED_CLASS = "hoopster-segmented"
 PRE_LINE_CLASS = "hoopster-pre-line"
 TIMER_CLASS = "hoopster-timer"
 OUTCOME_GRID_CLASS = "hoopster-outcome-grid"
+# Android app volume buttons (REQ-085, task 2026-11-09_android_app): an outcome button's
+# extra class says whether it counts as success; assets/hoopster_app.js reads it.
+OUTCOME_SUCCESS_CLASS = "hoopster-outcome-success"
+OUTCOME_FAIL_CLASS = "hoopster-outcome-fail"
 OUTCOME_GRID_COLUMNS = 2
 NAV_GRID_COLUMNS = 2
 NO_PERSONAL_BEST = "No personal best yet"
@@ -720,6 +724,8 @@ def _timer_controls(drill: dict) -> list[Component]:
     Return Values:
         list[Component]: [timer block] with drill-timer-display, drill-timer-start, -stop,
         -reset, the drill-timer store and the drill-timer-tick interval; [] without a timer.
+        The block (drill-timer-area) carries the display's starting text in
+        data-timer-initial (read by assets/hoopster_app.js).
 
     Notes:
         The clientside timer_step is the single writer of drill-timer, the display, the
@@ -765,6 +771,9 @@ def _timer_controls(drill: dict) -> list[Component]:
                 gap="xs",
             ),
             id="drill-timer-area",
+            # The display's starting text, for the Android app's "first press starts a
+            # countdown not yet run" (REQ-085); React keeps it current between drills.
+            **{"data-timer-initial": display},
         )
     ]
 
@@ -888,11 +897,18 @@ def values_panel(
 
     Notes:
         drill-value-2 is always present (Save reads it) and shown only for a physical drill
-        with a second number. drill-delete-target holds the attempt id to delete.
+        with a second number. drill-delete-target holds the attempt id to delete. The hidden
+        drill-result-type element carries the result type code in data-result-type for the
+        Android app's volume buttons (REQ-085).
     """
     decimals = _value_decimals(drill)
     has_second = drill.get("result_type_code") == RESULT_PHYSICAL and bool(drill.get("value_2_label"))
     return [
+        html.Div(
+            id="drill-result-type",
+            className=HIDDEN_CLASS,
+            **{"data-result-type": str(drill.get("result_type_code") or "")},
+        ),
         court_player_picker(participants, default_player_id, "drill-player"),
         _side_control(drill),
         *_timer_controls(drill),
@@ -969,7 +985,8 @@ def outcome_panel(
 
     Notes:
         Buttons have the id {"type": "outcome-btn", "group": outcome_group_id, "index":
-        drill_outcome_id}. Stores: outcome-pending (picks so far), outcome-groups,
+        drill_outcome_id} and the extra class OUTCOME_SUCCESS_CLASS or OUTCOME_FAIL_CLASS
+        (is_success; read by the Android app's volume buttons, REQ-085). Stores: outcome-pending (picks so far), outcome-groups,
         outcome-submit (a complete rep, written by outcome_pick) and outcome-visit
         ({player_id: [attempt ids]}, this visit's reps for Undo). A hidden drill-attempts
         div keeps render_drill_player's outputs present.
@@ -977,13 +994,15 @@ def outcome_panel(
     blocks: list[Component] = []
     for group in groups:
         group_id = int(group["outcome_group_id"])
-        buttons = [
-            secondary_button(
+        buttons = []
+        for outcome in group["outcomes"]:
+            button = secondary_button(
                 {"type": "outcome-btn", "group": group_id, "index": int(outcome["drill_outcome_id"])},
                 str(outcome["outcome_label"]),
             )
-            for outcome in group["outcomes"]
-        ]
+            marker = OUTCOME_SUCCESS_CLASS if outcome.get("is_success") else OUTCOME_FAIL_CLASS
+            button.className = f"{button.className} {marker}"
+            buttons.append(button)
         blocks.append(dmc.Text(str(group["group_name"]), fw=600))
         blocks.append(
             dmc.SimpleGrid(

@@ -3,7 +3,10 @@
  * task 2026-10-23_shot_entry_complete item 7).
  * Registered by the controllers with ClientsideFunction("hoopster", "<name>").
  *
- * Every function is pure apart from Date.now() / new Date() and makes no network call.
+ * Every function is pure apart from Date.now() / new Date() and makes no network call. The
+ * only other side effects are vibrations: the countdown's end (timer_step) and, inside the
+ * Android app only, the "target" / "finished" buzz of the drill auto-advance (advanceSpot,
+ * through window.hoopsterBuzz of assets/hoopster_app.js; task 2026-11-09_android_app).
  * Exactly one function, court_dispatch, writes the court command stores (court-queue,
  * court-confirmed, court-outbox, court-failure), so JavaScript's single thread rules out lost
  * updates. court-ack is written by the server through set_props, which starts a fresh Dash
@@ -56,6 +59,13 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
     var MODE_CUMULATIVE = "cumulative";
     var MODE_MANUAL = "manual";
     var VIEW_FULL = "full";
+    var VIEW_HALF = "half";
+    // Free throws checkbox (2026-11-10). Duplicated from src/layouts_entry.py FIGURE_FT,
+    // FT_MODE_LABEL and COURT_SELECT_PROMPT; keep them equal.
+    var FIGURE_FT = "ft";
+    var FT_MODE_LABEL = "Free-throw line";
+    var COURT_SELECT_PROMPT = "Tap a spot on the court";
+    var FT_TALLY_PREFIX = "FT ";
 
     var MESSAGE_PICK_PLAYER = "Pick a player first.";
     var MESSAGE_TAP_SPOT = "Tap a spot on the court first.";
@@ -500,10 +510,39 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
       );
     }
 
+    // The keys already buzzed from advanceSpot, so a buzz comes once per drill, attempt,
+    // player and spot however often the callback runs (REQ-085, review_1 F9, review_2 R2-F1).
+    // The site never reloads between drills, so the key carries the entry parent (the drill)
+    // and the attempt; the set itself lives for the app session. "finished" follows the court
+    // spots of the plan; a free-throw target is not part of it.
+    var appBuzzedKeys = {};
+    // court-selected-label as it was when Free throws was ticked (ft_mode_view), or null.
+    var labelBeforeFt = null;
+
+    // The attempt the next or latest shot of a player belongs to: a pending New attempt
+    // request means the one after court-base's attempt_no; with no attempt yet, attempt 1.
+    function attemptKey(base, request, playerId) {
+      var playerBase = (base && base[String(playerId)]) || {};
+      var latest = playerBase.attempt_no || 0;
+      if (isPending(base, request, playerId)) {
+        return latest + 1;
+      }
+      return Math.max(latest, 1);
+    }
+
+    // Asks the Android app to buzz (assets/hoopster_app.js); nothing in a browser.
+    function appBuzzOnce(kind, key) {
+      if (appBuzzedKeys[key] || typeof window.hoopsterBuzz !== "function") {
+        return;
+      }
+      appBuzzedKeys[key] = true;
+      window.hoopsterBuzz(kind);
+    }
+
     // select_spot's drill-mode auto-advance (plan §3.7). Returns the six select_spot
     // outputs. Nothing changes without a plan, without a selected plan spot (the user tapped
     // a spot outside the plan) or while the selected spot is still below its target.
-    function advanceSpot(figure, selected, base, plan, playerId, queue, confirmed, request) {
+    function advanceSpot(figure, selected, base, plan, playerId, queue, confirmed, request, parent) {
       var courtSpots = planCourtSpots(plan);
       if (!courtSpots.length || isNaN(playerId) || !hasSpot(selected) || !figure ||
           !figure.data || !figure.data.length) {
@@ -527,6 +566,12 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
           next = candidate;
         }
       }
+      // Android app buzz (REQ-085): "finished" when every plan spot is done, else "target"
+      // for the spot that just reached its target; once per drill, attempt, player and spot.
+      var buzzScope = (parent ? parent.kind + "-" + parent.id : "court") + ":" +
+        attemptKey(base, request, playerId) + ":" + playerId;
+      appBuzzOnce(next === null ? "finished" : "target",
+        next === null ? buzzScope + ":finished" : buzzScope + ":" + selected.court_spot_id + ":target");
       if (next === null) {
         var done = noUpdates(SELECT_SPOT_OUTPUT_COUNT);
         done[2] = ALL_SPOTS_DONE;
@@ -600,15 +645,20 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
       // all are done the label says so. court-base is read as State, not Input: the server
       // sets it just before the ack, so as an Input it would count the acked shot twice
       // (base and queue) for a moment. With court-plan null the queue trigger does nothing.
+      // Free throws ticked (court-ft-mode, 2026-11-10): the court shows only the display-only
+      // free-throw spot, so taps, view switches and the drill auto-advance change nothing.
       select_spot: function (
         clickData, view, queue, figure, figures, selected, base, plan, playerValue,
-        confirmed, request
+        confirmed, request, ftMode, parent
       ) {
+        if (ftMode === true) {
+          return noUpdates(SELECT_SPOT_OUTPUT_COUNT);
+        }
         var trigger = triggeredId();
         if (trigger === "court-queue") {
           return advanceSpot(
             figure, selected, base, plan, parsePlayerId(playerValue), queue || [],
-            confirmed || [], request
+            confirmed || [], request, parent
           );
         }
         if (trigger === "court-view") {
@@ -663,11 +713,57 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
         ];
       },
 
+      // --- Court: Free throws checkbox (task 2026-11-09_android_app, 2026-11-10) ---
+
+      // Outputs: court-graph.figure, court-selected-label.children, court-make.disabled,
+      // court-miss.disabled, court-graph-wrap.className (all allow_duplicate; select_spot is
+      // the first writer). Ticked: the free-throw-line figure (half court), the label
+      // "Free-throw line", Make / Miss enabled. Unticked: the stored figure of the current
+      // view with the selected spot marked again, its label (or the tap prompt), and Make /
+      // Miss enabled only with a selected spot - the state select_spot would have left.
+      // A drill whose spots were all done keeps "All spots done" after unticking (review_2
+      // R2-F4): the label shown before ticking is remembered in labelBeforeFt.
+      ft_mode_view: function (ftMode, figures, view, selected, currentLabel) {
+        if (!figures) {
+          return noUpdates(SELECT_SPOT_OUTPUT_COUNT - 1);
+        }
+        if (ftMode === true) {
+          if (!figures[FIGURE_FT]) {
+            return noUpdates(SELECT_SPOT_OUTPUT_COUNT - 1);
+          }
+          if (currentLabel !== FT_MODE_LABEL) {
+            labelBeforeFt = currentLabel;
+          }
+          return [figures[FIGURE_FT], FT_MODE_LABEL, false, false, COURT_CLASS];
+        }
+        // Only when coming from Free throws on this page (the router's insertion run sees the
+        // page's own label, so a value left from another page is never used).
+        var allDone = currentLabel === FT_MODE_LABEL && labelBeforeFt === ALL_SPOTS_DONE;
+        labelBeforeFt = null;
+        var viewKey = view === VIEW_FULL ? VIEW_FULL : VIEW_HALF;
+        if (!figures[viewKey]) {
+          return noUpdates(SELECT_SPOT_OUTPUT_COUNT - 1);
+        }
+        var spotChosen = hasSpot(selected);
+        var spotLabel = spotChosen
+          ? "#" + selected.spot_number + " " + selected.spot_name + " · " + selected.zone_label
+          : COURT_SELECT_PROMPT;
+        return [
+          recolouredFigure(figures[viewKey], spotChosen ? selected.court_spot_id : null),
+          allDone ? ALL_SPOTS_DONE : spotLabel,
+          !spotChosen,
+          !spotChosen,
+          viewKey === VIEW_FULL ? COURT_FULL_CLASS : COURT_CLASS,
+        ];
+      },
+
       // --- Court: mode switch (REQ-011, REQ-012, REQ-014; plan D2, D4, D5) ---
 
       // Outputs: className of court-single-panel, court-cumulative-panel, court-manual-panel,
-      // court-details-area, court-ft-single-panel, court-ft-cumulative-panel.
-      entry_mode_view: function (mode) {
+      // court-details-area, court-ft-single-panel, court-ft-cumulative-panel. Since the Free
+      // throws checkbox (2026-11-10) the two old free-throw panels are always hidden, and the
+      // shot details are hidden while free throws are entered.
+      entry_mode_view: function (mode, ftMode) {
         var single = mode !== MODE_CUMULATIVE && mode !== MODE_MANUAL;
         var shown = function (visible) {
           return visible ? "" : HIDDEN_CLASS;
@@ -676,9 +772,9 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
           shown(single),
           shown(mode === MODE_CUMULATIVE),
           shown(mode === MODE_MANUAL),
-          shown(mode !== MODE_MANUAL),
-          shown(single),
-          shown(!single),
+          shown(mode !== MODE_MANUAL && ftMode !== true),
+          HIDDEN_CLASS,
+          HIDDEN_CLASS,
         ];
       },
 
@@ -687,11 +783,12 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
       // Outputs: court-request.data, court-form-feedback.children, then the values of
       // court-cum-makes, court-cum-attempts, court-manual-makes, court-manual-attempts,
       // court-ft-makes, court-ft-attempts. A valid form becomes a request for the dispatcher
-      // and only that form's two inputs are cleared.
+      // and only that form's two inputs are cleared. With Free throws ticked (ftMode), the
+      // X of Y and No spot forms save free-throw totals (no spot needed, 2026-11-10).
       entry_form_submit: function (
         cumSave, manualSave, ftSave, spot, cumMakes, cumAttempts, points,
         manMakes, manAttempts, ftMakes, ftAttempts, shotType, hand, creation, defense,
-        playerValue
+        playerValue, ftMode
       ) {
         var trigger = triggeredId();
         var clicks = { "court-cum-save": cumSave, "court-manual-save": manualSave,
@@ -709,7 +806,15 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
         var makes;
         var attempts;
         var clearFrom;
-        if (trigger === "court-cum-save") {
+        var ftTotals = { table: TABLE_FREE_THROW, entry_mode: MODE_CUMULATIVE,
+                         court_spot_id: null, point_value: null, details: null };
+        if (ftMode === true && trigger !== "court-ft-save") {
+          var fromCum = trigger === "court-cum-save";
+          makes = parseCount(fromCum ? cumMakes : manMakes);
+          attempts = parseCount(fromCum ? cumAttempts : manAttempts);
+          request = ftTotals;
+          clearFrom = fromCum ? 2 : 4;
+        } else if (trigger === "court-cum-save") {
           if (!hasSpot(spot)) {
             result[1] = MESSAGE_TAP_SPOT;
             return result;
@@ -729,8 +834,7 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
         } else {
           makes = parseCount(ftMakes);
           attempts = parseCount(ftAttempts);
-          request = { table: TABLE_FREE_THROW, entry_mode: MODE_CUMULATIVE,
-                      court_spot_id: null, point_value: null, details: null };
+          request = ftTotals;
           clearFrom = 6;
         }
         if (!countsValid(makes, attempts)) {
@@ -818,12 +922,18 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
       // Drill mode (entry-parent.kind "drill"): every insert also carries side
       // (court-drill-side) and new_attempt_after (the pending court-attempt-request of its
       // player, else null), and confirmed entries keep their spot_key for the plan progress.
+      // Free throws ticked (ftMode, 2026-11-10): Make and Miss enter free throws, exactly as
+      // the old FT Make and FT Miss did.
       court_dispatch: function (
         makeClicks, missClicks, ftMakeClicks, ftMissClicks, undoClicks, retryClicks,
         request, ack, watchdogTicks, spot, queue, confirmed, outbox, failure, parent,
-        playerValue, shotType, hand, creation, defense, attemptRequest, drillSide, base
+        playerValue, shotType, hand, creation, defense, attemptRequest, drillSide, base,
+        ftMode
       ) {
         var trigger = triggeredId();
+        if (ftMode === true && (trigger === "court-make" || trigger === "court-miss")) {
+          trigger = trigger === "court-make" ? "court-ft-make" : "court-ft-miss";
+        }
         var playerId = parsePlayerId(playerValue);
         var nextQueue = (queue || []).slice();
         var nextConfirmed = (confirmed || []).slice();
@@ -993,8 +1103,10 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
       // save still has automatic retries left. Drill mode: while the picked player has a
       // pending New attempt request (court-attempt-request), the tallies start from 0
       // instead of the base (plan §3.7); on other screens the request store stays {}.
+      // With Free throws ticked (ftMode) court-tally shows the free throws as "FT x / y".
       court_render: function (
-        base, queue, confirmed, outbox, ack, failure, playerValue, attemptRequest, undoNote
+        base, queue, confirmed, outbox, ack, failure, playerValue, attemptRequest, undoNote,
+        ftMode
       ) {
         var playerId = parsePlayerId(playerValue);
         var pending = queue || [];
@@ -1030,9 +1142,10 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
           statusColor = STATUS_SAVED_COLOR;
         }
 
+        var ftTally = tallyText(totals.free_throw.makes, totals.free_throw.attempts);
         return [
-          tallyText(totals.shot.makes, totals.shot.attempts),
-          tallyText(totals.free_throw.makes, totals.free_throw.attempts),
+          ftMode === true ? FT_TALLY_PREFIX + ftTally : tallyText(totals.shot.makes, totals.shot.attempts),
+          ftTally,
           statusText,
           statusColor,
           failed ? RETRY_SHOWN_STYLE : RETRY_HIDDEN_STYLE,
@@ -1173,7 +1286,9 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
           next.running = false;
           next.started_at = null;
           next.elapsed_ms = limitMs;
-          if (navigator && typeof navigator.vibrate === "function") {
+          // In the Android app its own "timer" buzz (REQ-085); elsewhere the browser's.
+          var appBuzzed = typeof window.hoopsterBuzz === "function" && window.hoopsterBuzz("timer");
+          if (!appBuzzed && navigator && typeof navigator.vibrate === "function") {
             navigator.vibrate(TIMER_VIBRATE_MS);
           }
           return [next, TIMER_DONE_TEXT, true, noUpdate()];
