@@ -34,12 +34,23 @@ jobs:
       - name: Signing key
         env:
           KEYSTORE_B64: ${{ secrets.HOOPSTER_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.HOOPSTER_KEYSTORE_PASSWORD }}
         run: |
           if [ -z "$KEYSTORE_B64" ]; then
             echo "::error::The signing secrets are missing. Run the 'Android signing key' workflow once and add its four values as repository secrets (android/README.md)."
             exit 1
           fi
-          echo "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/hoopster.jks"
+          # A secret pasted on Windows can carry spaces or line breaks (\r\n); base64 refuses
+          # them, so they are removed first. The decoded file must be a readable keystore.
+          if ! printf '%s' "$KEYSTORE_B64" | tr -d ' \t\r\n' | base64 --decode > "$RUNNER_TEMP/hoopster.jks"; then
+            echo "::error::HOOPSTER_KEYSTORE_B64 is not valid base64. Paste the whole content of HOOPSTER_KEYSTORE_B64.txt again (Notepad: Ctrl+A, Ctrl+C) and update the secret."
+            exit 1
+          fi
+          if ! keytool -list -keystore "$RUNNER_TEMP/hoopster.jks" -storetype PKCS12 \
+               -storepass "$KEYSTORE_PASSWORD" > /dev/null 2>&1; then
+            echo "::error::The keystore could not be opened: HOOPSTER_KEYSTORE_B64 is incomplete or HOOPSTER_KEYSTORE_PASSWORD does not match it. Paste both secrets again."
+            exit 1
+          fi
           echo "HOOPSTER_KEYSTORE_FILE=$RUNNER_TEMP/hoopster.jks" >> "$GITHUB_ENV"
 
       - name: Build the APK
