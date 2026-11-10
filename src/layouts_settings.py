@@ -87,6 +87,16 @@ COUNT_TEXT = "{shown} of {total} items"
 CLEANUP_OFF_TEXT = "Automatic cleanup is not switched on yet."
 MANUAL_MISSING_TEXT = "The user manual is not available on this server."
 
+# "This device" group of the hub: settings stored in this browser only (REQ-084, task
+# 2026-11-09_keep_awake). The checkbox starts ticked; the clientside callback
+# hoopster_wake.setting_load then shows the stored value.
+DEVICE_GROUP_TITLE = "This device"
+KEEP_AWAKE_LABEL = "Keep the screen on during practice"
+KEEP_AWAKE_NOTE = (
+    "Applies to this phone or tablet only. Works on the practice screens and live game entry "
+    "when the browser allows it."
+)
+
 
 # --- Shared pieces ---
 
@@ -140,7 +150,8 @@ def hide_test_data_checkbox(element_id: str, label: str) -> Component:
 def settings_hub_layout() -> Component:
     """
     Description:
-        The Settings hub: three groups of links (Data, Access, Training).
+        The Settings hub: three groups of links (Data, Access, Training), then the
+        "This device" group with the keep-the-screen-on checkbox (REQ-084).
 
     Parameters:
         None.
@@ -149,7 +160,10 @@ def settings_hub_layout() -> Component:
         Component: the page.
 
     Notes:
-        Each link is a nav_link in a button-style wrapper (44 px and more).
+        Each link is a nav_link in a button-style wrapper (44 px and more). The checkbox
+        (settings-keep-awake) is stored in the browser by clientside callbacks
+        (controller_settings); settings-keep-awake-ready turns true once the stored value
+        is shown, so the router's insertion of the page never overwrites it.
     """
     children: list[Component] = []
     for group_title, links in SETTINGS_GROUPS:
@@ -158,6 +172,21 @@ def settings_hub_layout() -> Component:
             html.Div(nav_link(element_id, label, path), className="hoopster-link-button")
             for element_id, label, path in links
         )
+    children.extend(
+        [
+            dmc.Title(DEVICE_GROUP_TITLE, order=3),
+            dmc.Checkbox(
+                id="settings-keep-awake",
+                label=KEEP_AWAKE_LABEL,
+                checked=True,
+                size=CONTROL_SIZE,
+                className="hoopster-check",
+            ),
+            dmc.Text(KEEP_AWAKE_NOTE, id="settings-keep-awake-note", size="sm", c="dimmed"),
+            dcc.Store(id="settings-keep-awake-ready", data=False),
+            dcc.Store(id="settings-keep-awake-saved"),
+        ]
+    )
     return page_skeleton("Settings", children)
 
 

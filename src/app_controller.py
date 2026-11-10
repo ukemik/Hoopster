@@ -914,7 +914,9 @@ STATIC_ROUTES: dict[str, str] = {
     "/physical-tests": ROUTE_PHYSICAL_TESTS,
 }
 # (compiled pattern, route name, parameter names) for paths with ids, tried in order after
-# STATIC_ROUTES, so "/drills/new" never reaches the "/drills/<id>" pattern.
+# STATIC_ROUTES, so "/drills/new" never reaches the "/drills/<id>" pattern. The practice
+# overview, court, run, run-one-drill and live-game patterns are duplicated in
+# assets/hoopster_wakelock.js AWAKE_PATH_PATTERNS (REQ-084): keep them equal.
 PATTERN_ROUTES: tuple[tuple[re.Pattern[str], str, tuple[str, ...]], ...] = (
     (COURT_PATH_PATTERN, ROUTE_PRACTICE_COURT, ("practice_session_id",)),
     (PLAYER_EDIT_PATH_PATTERN, ROUTE_PLAYER_EDIT, ("player_id",)),
@@ -1079,7 +1081,8 @@ def route_page(
 def register_router(app: Dash, page_builders: Mapping[str, PageBuilder]) -> None:
     """
     Description:
-        Registers the device clock, the router and the bottom-bar drawer callbacks.
+        Registers the device clock, the router, the bottom-bar drawer callbacks and the
+        screen wake lock (REQ-084).
 
     Parameters:
         app: the Dash application.
@@ -1148,4 +1151,11 @@ def register_router(app: Dash, page_builders: Mapping[str, PageBuilder]) -> None
         Output("nav-more-drawer", "opened", allow_duplicate=True),
         Input("url", "pathname"),
         prevent_initial_call=True,
+    )
+    # Keep the screen on during a practice (REQ-084, task 2026-11-09_keep_awake). Runs on
+    # the first load too, so opening a practice address directly holds the lock.
+    app.clientside_callback(
+        ClientsideFunction("hoopster_wake", "keep_awake"),
+        Output("keep-awake-state", "data"),
+        Input("url", "pathname"),
     )

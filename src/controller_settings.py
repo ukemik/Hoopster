@@ -15,7 +15,7 @@ import re
 import zipfile
 from datetime import date, datetime
 
-from dash import ALL, Dash, Input, Output, State, ctx, dcc, no_update
+from dash import ALL, ClientsideFunction, Dash, Input, Output, State, ctx, dcc, no_update
 from dash.development.base_component import Component
 from dash.exceptions import PreventUpdate
 from flask_login import current_user
@@ -689,7 +689,8 @@ def register_settings_callbacks(app: Dash) -> None:
     """
     Description:
         Registers the Settings data-page callbacks: the Recently deleted filters and
-        Restore, the two exports and the retention Save.
+        Restore, the two exports and the retention Save, and the hub's keep-the-screen-on
+        checkbox (REQ-084, clientside, stored in the browser).
 
     Parameters:
         app: the Dash application.
@@ -702,6 +703,24 @@ def register_settings_callbacks(app: Dash) -> None:
         callback; the second writer uses allow_duplicate. Button callbacks ignore runs
         without a click (router insertion trap, notes_for_agents §8).
     """
+    # Keep the screen on (REQ-084): show the stored value when the hub appears, then store
+    # every change. The ready flag comes back with the loaded value, so the save callback,
+    # which the router may also run on insertion, never overwrites the stored value with
+    # the checkbox's initial tick.
+    app.clientside_callback(
+        ClientsideFunction("hoopster_wake", "setting_load"),
+        Output("settings-keep-awake", "checked"),
+        Output("settings-keep-awake-ready", "data"),
+        Input("settings-keep-awake", "id"),
+    )
+    app.clientside_callback(
+        ClientsideFunction("hoopster_wake", "setting_save"),
+        Output("settings-keep-awake-saved", "data"),
+        Input("settings-keep-awake", "checked"),
+        State("settings-keep-awake-ready", "data"),
+        prevent_initial_call=True,
+    )
+
     app.callback(
         Output("deleted-list", "children"),
         Output("deleted-count", "children"),

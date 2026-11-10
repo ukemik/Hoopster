@@ -587,7 +587,10 @@ def app_shell() -> Component:
         stores. The router fills page-content. Court stores live in the court page, not here
         (plan §3.5, Open Question 6). resume-checked (session storage, no data argument so a
         rebuilt shell never overwrites it) records that Home's automatic resume already ran
-        in this browser session (REQ-057, task 2026-10-23_games).
+        in this browser session (REQ-057, task 2026-10-23_games). keep-awake-state receives
+        "wanted" (asked for, not necessarily granted), "released" or "unsupported" from the
+        screen wake-lock callback on every navigation (REQ-084, task 2026-11-09_keep_awake);
+        nothing reads it.
     """
     return dmc.MantineProvider(
         [
@@ -595,6 +598,7 @@ def app_shell() -> Component:
             dcc.Store(id="device-clock"),
             dcc.Store(id="auth-state"),
             dcc.Store(id="resume-checked", storage_type="session"),
+            dcc.Store(id="keep-awake-state"),
             html.Div(id="page-content", className="hoopster-page"),
             bottom_nav(),
             *_nav_drawers(),
