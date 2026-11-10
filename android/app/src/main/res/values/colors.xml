@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Hoopster orange, as the site's theme colour. -->
+    <color name="ic_launcher_background">#FD7E14</color>
+</resources>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Hoopster</string>
+    <!-- The live site (Render). Change here and rebuild to point the app elsewhere. -->
+    <string name="site_url" translatable="false">https://hoopster-nend.onrender.com/</string>
+    <!-- First use on a phone: the site does not know this device yet. -->
+    <string name="setup_title">Add this phone</string>
+    <string name="setup_message">Hoopster does not know this phone yet. On a device that is already set up, open Settings › Add a device, copy the link and paste it here.</string>
+    <string name="setup_hint">https://…/enroll/… or the code</string>
+    <string name="setup_open">Open</string>
+    <string name="setup_cancel">Cancel</string>
+    <string name="setup_refused">That is not a Hoopster setup link. Copy the whole link from Settings › Add a device.</string>
+    <string name="setup_later">Open Hoopster again to add this phone.</string>
+</resources>

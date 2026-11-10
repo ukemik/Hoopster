@@ -1,0 +1,44 @@
+# One-time: creates the Android app's signing key on GitHub's servers (task
+# 2026-11-09_android_app). Run it by hand once (Actions > Android signing key > Run
+# workflow), download the artifact, add its four values as repository secrets, keep the
+# backup .jks somewhere safe, then delete the artifact. See android/README.md.
+# Running it again makes a NEW key: phones with the old app must uninstall it first.
+name: Android signing key
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  key:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Create the key
+        run: |
+          PASS="$(openssl rand -hex 20)"
+          echo "::add-mask::$PASS"
+          keytool -genkeypair -keystore hoopster.jks -storetype PKCS12 -alias hoopster \
+            -keyalg RSA -keysize 4096 -validity 10000 \
+            -storepass "$PASS" -keypass "$PASS" -dname "CN=Hoopster"
+          mkdir out
+          base64 -w0 hoopster.jks > out/HOOPSTER_KEYSTORE_B64.txt
+          printf '%s' "$PASS" > out/HOOPSTER_KEYSTORE_PASSWORD.txt
+          printf '%s' "$PASS" > out/HOOPSTER_KEY_PASSWORD.txt
+          printf '%s' "hoopster" > out/HOOPSTER_KEY_ALIAS.txt
+          cp hoopster.jks out/hoopster-key-backup.jks
+          rm hoopster.jks
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: hoopster-signing-key
+          path: out/
+          retention-days: 1
+          if-no-files-found: error

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A basketball inside the adaptive icon's 66 dp safe zone (108 dp canvas). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#E8590C"
+        android:strokeColor="#212529"
+        android:strokeWidth="2.5"
+        android:pathData="M24,54 a30,30 0 1,0 60,0 a30,30 0 1,0 -60,0 Z" />
+    <path
+        android:strokeColor="#212529"
+        android:strokeWidth="2.5"
+        android:pathData="M54,24 L54,84 M24,54 L84,54 M33,33 Q46,54 33,75 M75,33 Q62,54 75,75" />
+</vector>
