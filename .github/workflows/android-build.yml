@@ -43,7 +43,14 @@ jobs:
           # A secret pasted on Windows can carry spaces or line breaks (\r\n); base64 refuses
           # them, so they are removed first. The decoded file must be a readable keystore.
           if ! printf '%s' "$KEYSTORE_B64" | tr -d ' \t\r\n' | base64 --decode > "$RUNNER_TEMP/hoopster.jks"; then
-            echo "::error::HOOPSTER_KEYSTORE_B64 is not valid base64. Paste the whole content of HOOPSTER_KEYSTORE_B64.txt again (Notepad: Ctrl+A, Ctrl+C) and update the secret."
+            # Safe description of what arrived (never the value): length, the code points of
+            # characters base64 does not allow, and whether it starts like a PKCS12 file.
+            CLEAN="$(printf '%s' "$KEYSTORE_B64" | tr -d ' \t\r\n')"
+            BAD="$(printf '%s' "$CLEAN" | tr -d 'A-Za-z0-9+/=' | od -An -tx1 | tr -s ' \n' ' ' | cut -c1-120)"
+            echo "Secret length: raw ${#KEYSTORE_B64}, without spaces/line breaks ${#CLEAN}; length mod 4: $(( ${#CLEAN} % 4 ))"
+            echo "Not-allowed characters (hex, first few): ${BAD:-none}"
+            case "$CLEAN" in MII*) echo "Starts like a key file: yes" ;; *) echo "Starts like a key file: no" ;; esac
+            echo "::error::HOOPSTER_KEYSTORE_B64 is not valid base64. See the three lines above; paste the whole content of HOOPSTER_KEYSTORE_B64.txt again and update the secret."
             exit 1
           fi
           if ! keytool -list -keystore "$RUNNER_TEMP/hoopster.jks" -storetype PKCS12 \
