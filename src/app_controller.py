@@ -824,6 +824,8 @@ ROUTE_SEASON_EDIT = "season_edit"
 ROUTE_PRACTICE_OVERVIEW = "practice_overview"
 ROUTE_PRACTICE_RUN = "practice_run"
 ROUTE_PRACTICE_RUN_DRILL = "practice_run_drill"
+# The practices list (task 2026-11-12_practices_list, REQ-086); needs a live player.
+ROUTE_PRACTICES = "practices"
 # Settings hub and its pages (task 2026-10-23_settings_hub, item 14). Seasons is the existing
 # /seasons route, so there is no settings_seasons route.
 ROUTE_SETTINGS = "settings"
@@ -896,6 +898,7 @@ STATIC_ROUTES: dict[str, str] = {
     "/templates/new": ROUTE_TEMPLATE_NEW,
     "/games": ROUTE_GAMES,
     "/games/new": ROUTE_GAME_NEW,
+    "/practices": ROUTE_PRACTICES,
     "/seasons": ROUTE_SEASONS,
     "/settings": ROUTE_SETTINGS,
     "/settings/deleted": ROUTE_SETTINGS_DELETED,
@@ -1046,7 +1049,7 @@ def route_page(
             2026-10-23_drill_import), and "dashboards" (task 2026-10-23_dashboards; no
             longer a coming-soon page), and "goals", "goal_new", "goal", "measurements",
             "measurement", "physical_tests" (task 2026-10-23_goals_measurements; physical
-            tests need no player).
+            tests need no player), and "practices" (task 2026-11-12_practices_list).
 
     Return Values:
         tuple[Component, str]: page-content children and the app-nav className.

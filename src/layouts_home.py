@@ -250,6 +250,10 @@ def home_layout(
                 nav_link("home-games", "Games", "/games"),
                 className="hoopster-link-button",
             ),
+            html.Div(
+                nav_link("home-practices", "Practices", "/practices"),
+                className="hoopster-link-button",
+            ),
             dmc.Paper(
                 goals_content,
                 id="home-goals",

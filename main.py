@@ -183,6 +183,8 @@ register_router(
         "practice_overview": controller_practice.build_practice_overview_page,
         "practice_run": controller_run.build_run_page,
         "practice_run_drill": controller_run.build_run_page,
+        # The practices list (task 2026-11-12_practices_list; needs a live player).
+        "practices": controller_practice.build_practices_page,
         # Settings hub (task 2026-10-23_settings_hub; no player needed).
         "settings": controller_settings.build_settings_page,
         "settings_deleted": controller_settings.build_deleted_page,

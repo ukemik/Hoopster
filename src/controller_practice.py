@@ -27,6 +27,7 @@ from src.app_controller import (
     parse_player_value,
     run_write,
     run_write_with_reason,
+    set_current_player_id,
 )
 from src.data_entry import (
     EntryParent,
@@ -50,12 +51,14 @@ from src.data_practice import (
     list_practice_drills,
     list_practice_participants,
     list_practice_types,
+    list_practices,
     list_selectable_drills,
     list_selectable_sets,
     list_selectable_templates,
     remove_placed_set,
     remove_practice_drill,
     remove_practice_player,
+    soft_delete_practice,
     start_practice_from_template,
     update_practice_details,
 )
@@ -65,12 +68,16 @@ from src.layouts_practice import (
     DURATION_MIN,
     LOCATION_MAX_LENGTH,
     NOTES_MAX_LENGTH,
+    PRACTICES_DELETE_COLUMN,
     court_layout,
     court_no_players_layout,
     court_player_picker,
+    delete_practice_question,
     overview_body,
     practice_new_layout,
     practice_overview_layout,
+    practices_content,
+    practices_layout,
     run_area_class,
     set_options,
 )
@@ -1299,6 +1306,291 @@ def confirm_remove(
     return (no_update if feedback else False), str(feedback), body, selectable, run_class
 
 
+# --- Practices list (REQ-086, REQ-005, REQ-006; task 2026-11-12_practices_list) ---
+
+MESSAGE_PRACTICES_LOAD_FAILED = "Could not load the practices. Reference: {ref}"
+MESSAGE_PRACTICE_DELETED = "Practice deleted."
+MESSAGE_PRACTICE_ALREADY_DELETED = "This practice was already deleted."
+MESSAGE_PRACTICE_DELETE_FAILED = "Could not delete the practice. Reference: {ref}"
+
+
+def _practices_content_for(player_id: int) -> list[Component]:
+    """
+    Description:
+        Reads and builds practices-content (grid and row store) for a player.
+
+    Parameters:
+        player_id: the selected player. Never a user id (COD-8-01).
+
+    Return Values:
+        list[Component]: practices_content children.
+
+    Notes:
+        Exceptions propagate to the caller (router, picker or delete callback).
+    """
+    return practices_content(list_practices(data_handler.get_session(), player_id))
+
+
+def build_practices_page(
+    player_id: int, clock: DeviceClock, params: dict[str, str]
+) -> Component:
+    """
+    Description:
+        Builds /practices: the player picker, New practice and the grid of the selected
+        player's practices, newest first (REQ-086).
+
+    Parameters:
+        player_id: the selected player from current_player_id() (never None here). Never a
+            user id (COD-8-01).
+        clock: the device clock (unused).
+        params: the route parameters (none).
+
+    Return Values:
+        Component: the page.
+
+    Notes:
+        Exceptions propagate to the router, which shows the error page with a reference.
+    """
+    players = list_live_players(data_handler.get_session())
+    return practices_layout(players, player_id, _practices_content_for(player_id))
+
+
+def select_practices_player(value: str | None) -> list[Component] | str:
+    """
+    Description:
+        The practices player picker: makes the picked player the selected player and rebuilds
+        the grid for that player.
+
+    Parameters:
+        value: practices-player.value, the player id as a string.
+
+    Return Values:
+        list[Component] | str: the new children of practices-content, or a message with a
+        reference when the practices could not be read.
+
+    Notes:
+        A boundary (COD-4-04). As controller_games.select_games_player: a value that is not a
+        player id, or a player no longer live (warning), changes nothing (PreventUpdate).
+    """
+    player_id = parse_player_value(value)
+    if player_id is None:
+        raise PreventUpdate
+    try:
+        if not set_current_player_id(player_id):
+            logger.warning(
+                "Practices picker chose player %s, which is not a live player", player_id
+            )
+            raise PreventUpdate
+        return _practices_content_for(player_id)
+    except PreventUpdate:
+        raise
+    except Exception as exc:
+        ref = new_reference_code()
+        log_failure(logger, exc, "Practices player change failed (ref %s)", ref)
+        return MESSAGE_PRACTICES_LOAD_FAILED.format(ref=ref)
+
+
+def practices_cell_clicked(
+    cell: dict | None, rows: dict | None
+) -> tuple[object, object, object, object, object]:
+    """
+    Description:
+        A click in the practices grid: on the Delete column it opens the delete dialog for
+        that practice (REQ-005); anywhere else it opens the practice on the screen used to
+        record it (REQ-086).
+
+    Parameters:
+        cell: practices-grid.cellClicked ({"rowId", "colId", ...}).
+        rows: practices-rows.data (practices_row_index).
+
+    Return Values:
+        tuple: url.pathname (the practice's path, or no_update), practices-delete-modal.opened,
+        practices-delete-text, practices-delete-id.data and practices-delete-feedback (all
+        no_update when opening the practice).
+
+    Notes:
+        No database access. Raises PreventUpdate for a click without a known row id.
+    """
+    if not isinstance(cell, dict) or not isinstance(rows, dict):
+        raise PreventUpdate
+    row_id = cell.get("rowId")
+    if not isinstance(row_id, str) or not row_id.isascii() or not row_id.isdigit():
+        raise PreventUpdate
+    entry = rows.get(row_id)
+    if not isinstance(entry, dict):
+        raise PreventUpdate
+    if cell.get("colId") == PRACTICES_DELETE_COLUMN:
+        return no_update, True, delete_practice_question(entry), int(row_id), ""
+    path = entry.get("path")
+    if not isinstance(path, str):
+        raise PreventUpdate
+    return path, no_update, no_update, no_update, no_update
+
+
+def _shown_player_id(picker_value: object) -> int | None:
+    """
+    Description:
+        The player the practices page shows: the practices-player picker's value, else the
+        browser session's selected player.
+
+    Parameters:
+        picker_value: practices-player.value (a player id as a string).
+
+    Return Values:
+        int | None: the player id, or None when neither gives one (no live profile).
+
+    Notes:
+        The picker is what the user sees above the grid, so the grid is rebuilt for it
+        (review_1 F1, COD-8-01). Never a user id.
+    """
+    player_id = parse_player_value(picker_value)
+    if player_id is not None:
+        return player_id
+    return current_player_id()
+
+
+def confirm_delete_practice(
+    n_clicks: int | None, practice_id: object, picker_value: object
+) -> tuple[object, object, str, object]:
+    """
+    Description:
+        The Delete button of the dialog: deletes the whole practice through
+        h_data.fn_soft_delete('practice_session') and rebuilds the grid (REQ-005, REQ-006).
+
+    Parameters:
+        n_clicks: practices-delete-confirm.n_clicks.
+        practice_id: practices-delete-id.data, set by practices_cell_clicked from the clicked
+            row (whose id comes from the list query).
+        picker_value: practices-player.value; the grid is rebuilt for this player
+            (_shown_player_id), so it always matches the picker.
+
+    Return Values:
+        tuple: practices-delete-modal.opened (False when done), practices-content children
+        (rebuilt, or no_update), practices-delete-feedback text, and practices-message text.
+
+    Notes:
+        A boundary (COD-4-04). Raises PreventUpdate without a click (router insertion trap).
+        A practice already deleted elsewhere is not an error: the work finds it gone and
+        deletes nothing. With no player to show, the grid is rebuilt empty.
+    """
+    if not n_clicks:
+        raise PreventUpdate
+    stored_id = _stored_id(practice_id)
+    if stored_id is None:
+        ref = new_reference_code()
+        logger.error("Delete practice refused (ref %s): practices-delete-id is not an id", ref)
+        return no_update, no_update, MESSAGE_PRACTICE_DELETE_FAILED.format(ref=ref), ""
+    deleted_id: int = stored_id
+
+    def work(write_session: Session) -> int | None:
+        """
+        Description:
+            Deletes the practice when it is still live.
+
+        Parameters:
+            write_session: the write session from run_write.
+
+        Return Values:
+            int | None: the rows marked, or None when the practice was already gone.
+
+        Notes:
+            Inside run_write (COD-6-01).
+        """
+        if get_practice(write_session, deleted_id) is None:
+            return None
+        return soft_delete_practice(write_session, deleted_id)
+
+    result = run_write(current_user.user_id, work, "delete practice")
+    if not result.ok:
+        return no_update, no_update, MESSAGE_PRACTICE_DELETE_FAILED.format(ref=result.ref), ""
+    message = MESSAGE_PRACTICE_ALREADY_DELETED if result.value is None else MESSAGE_PRACTICE_DELETED
+    logger.info("Delete practice %s: %s rows marked", deleted_id, result.value)
+    try:
+        shown_player_id = _shown_player_id(picker_value)
+        content: object = (
+            practices_content([])
+            if shown_player_id is None
+            else _practices_content_for(shown_player_id)
+        )
+    except Exception as exc:
+        ref = new_reference_code()
+        log_failure(logger, exc, "Practices list reload after delete failed (ref %s)", ref)
+        content = no_update
+        message = MESSAGE_REFRESH_FAILED.format(ref=ref)
+    return False, content, "", message
+
+
+def _stored_id(value: object) -> int | None:
+    """
+    Description:
+        Reads a practice id kept in a dcc.Store.
+
+    Parameters:
+        value: the store's data.
+
+    Return Values:
+        int | None: the id when it is a positive int (not a bool), else None.
+
+    Notes:
+        Pure.
+    """
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return None
+    return value
+
+
+def _register_practices_list_callbacks(app: Dash) -> None:
+    """
+    Description:
+        Registers the practices list callbacks: the player picker, the grid click and the
+        delete dialog.
+
+    Parameters:
+        app: the Dash application.
+
+    Return Values:
+        None.
+
+    Notes:
+        Every url.pathname writer uses allow_duplicate. The dialog's opened and feedback are
+        first written by practices_cell_clicked, so the others use allow_duplicate.
+    """
+    app.callback(
+        Output("practices-content", "children"),
+        Input("practices-player", "value"),
+        prevent_initial_call=True,
+    )(select_practices_player)
+
+    app.callback(
+        Output("url", "pathname", allow_duplicate=True),
+        Output("practices-delete-modal", "opened"),
+        Output("practices-delete-text", "children"),
+        Output("practices-delete-id", "data"),
+        Output("practices-delete-feedback", "children"),
+        Input("practices-grid", "cellClicked"),
+        State("practices-rows", "data"),
+        prevent_initial_call=True,
+    )(practices_cell_clicked)
+
+    app.clientside_callback(
+        ClientsideFunction("hoopster", "close_modal"),
+        Output("practices-delete-modal", "opened", allow_duplicate=True),
+        Input("practices-delete-cancel", "n_clicks"),
+        prevent_initial_call=True,
+    )
+
+    app.callback(
+        Output("practices-delete-modal", "opened", allow_duplicate=True),
+        Output("practices-content", "children", allow_duplicate=True),
+        Output("practices-delete-feedback", "children", allow_duplicate=True),
+        Output("practices-message", "children"),
+        Input("practices-delete-confirm", "n_clicks"),
+        State("practices-delete-id", "data"),
+        State("practices-player", "value"),
+        prevent_initial_call=True,
+    )(confirm_delete_practice)
+
+
 # --- Registration ---
 
 def register_practice_callbacks(app: Dash) -> None:
@@ -1338,6 +1630,7 @@ def register_practice_callbacks(app: Dash) -> None:
         prevent_initial_call=True,
     )(create_practice)
     _register_overview_callbacks(app)
+    _register_practices_list_callbacks(app)
 
     app.callback(
         Output("court-add-player-modal", "opened"),

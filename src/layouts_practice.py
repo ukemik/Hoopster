@@ -9,7 +9,9 @@ screen opens and discarded when it is left (plan §3.5, §3.6).
 
 import logging
 from datetime import date
+from typing import cast
 
+import dash_ag_grid as dag
 import dash_mantine_components as dmc
 from dash import dcc, html
 from dash.development.base_component import Component
@@ -197,6 +199,284 @@ def practice_new_layout(
             *_detail_fields("practice-new", None, None, None),
             primary_button("practice-new-submit", "Start practice"),
             form_message("practice-new-feedback"),
+        ],
+    )
+
+
+# --- Practices list (REQ-086, REQ-005; task 2026-11-12_practices_list) ---
+
+PRACTICES_PATH = "/practices"
+PRACTICES_GRID_HEIGHT_PX = 460
+# The grid column whose click opens the delete dialog instead of the practice.
+PRACTICES_DELETE_COLUMN = "delete"
+PRACTICES_DELETE_TEXT = "Delete"
+NO_SHOTS_TEXT = "—"
+DELETE_PRACTICE_TITLE = "Delete practice?"
+
+
+def practice_path(practice_session_id: int, has_drills: bool) -> str:
+    """
+    Description:
+        Where a practice opens: its overview when it has drills, else its court screen — the
+        same rule as Home's Recent list and Resume (practice_drills D3).
+
+    Parameters:
+        practice_session_id: the practice.
+        has_drills: data_practice.list_practices' has_drills.
+
+    Return Values:
+        str: "/practice/<id>" or "/practice/<id>/court".
+
+    Notes:
+        Pure.
+    """
+    if has_drills:
+        return f"/practice/{practice_session_id}"
+    return f"/practice/{practice_session_id}/court"
+
+
+def made_of_text(made: object, attempted: object) -> str:
+    """
+    Description:
+        A "made / attempted" cell, e.g. "12 / 20", or "—" with no attempts.
+
+    Parameters:
+        made: the makes (a number or None).
+        attempted: the attempts (a number or None).
+
+    Return Values:
+        str: the cell text.
+
+    Notes:
+        Pure.
+    """
+    attempts = int(cast(int, attempted or 0))
+    if attempts <= 0:
+        return NO_SHOTS_TEXT
+    return f"{int(cast(int, made or 0))} / {attempts}"
+
+
+def practice_date_text(value: object) -> str:
+    """
+    Description:
+        A practice date as shown in the delete question, e.g. "Sat 18 Oct 2026" (as stored,
+        REQ-055).
+
+    Parameters:
+        value: the session_date.
+
+    Return Values:
+        str: the formatted date, or the value's text when it is not a date.
+
+    Notes:
+        Pure. Built without %-d, which Windows' strftime does not support.
+    """
+    if isinstance(value, date):
+        return f"{value:%a} {value.day} {value:%b %Y}"
+    return str(value)
+
+
+def practices_grid_rows(rows: list[dict]) -> list[dict[str, object]]:
+    """
+    Description:
+        The practices grid's rowData.
+
+    Parameters:
+        rows: data_practice.list_practices, newest first.
+
+    Return Values:
+        list[dict[str, object]]: {"row_id" (str(practice_session_id)), "date_iso"
+        ("YYYY-MM-DD"), "type", "fg" ("12 / 20" or "—"), "ft", "delete" ("Delete")} per
+        practice, in the given order.
+
+    Notes:
+        Pure. row_id is the grid's getRowId, so cellClicked carries the practice id. The date
+        column shows date_iso as "Sat 18 Oct" through d3 and sorts by the ISO text.
+    """
+    grid_rows: list[dict[str, object]] = []
+    for row in rows:
+        session_date = row.get("session_date")
+        grid_rows.append(
+            {
+                "row_id": str(int(cast(int, row["practice_session_id"]))),
+                "date_iso": session_date.isoformat() if isinstance(session_date, date) else "",
+                "type": str(row.get("practice_type_label") or ""),
+                "fg": made_of_text(row.get("fgm"), row.get("fga")),
+                "ft": made_of_text(row.get("ftm"), row.get("fta")),
+                PRACTICES_DELETE_COLUMN: PRACTICES_DELETE_TEXT,
+            }
+        )
+    return grid_rows
+
+
+def practices_row_index(rows: list[dict]) -> dict[str, dict[str, object]]:
+    """
+    Description:
+        What a click on a row needs, keyed by row id: the path it opens and the delete
+        question's parts.
+
+    Parameters:
+        rows: data_practice.list_practices.
+
+    Return Values:
+        dict[str, dict[str, object]]: row id -> {"path", "date_text", "type",
+        "participants"}.
+
+    Notes:
+        Pure. Kept in the store practices-rows next to the grid, so the click callbacks need no
+        database read; the delete itself re-checks in SQL (fn_soft_delete raises when the
+        practice is gone).
+    """
+    index: dict[str, dict[str, object]] = {}
+    for row in rows:
+        practice_id = int(cast(int, row["practice_session_id"]))
+        index[str(practice_id)] = {
+            "path": practice_path(practice_id, bool(row.get("has_drills"))),
+            "date_text": practice_date_text(row.get("session_date")),
+            "type": str(row.get("practice_type_label") or ""),
+            "participants": int(cast(int, row.get("participant_count") or 0)),
+        }
+    return index
+
+
+def delete_practice_question(entry: dict) -> str:
+    """
+    Description:
+        The delete dialog's question (REQ-005, REQ-006), with the warning for a practice
+        shared by several players.
+
+    Parameters:
+        entry: one value of practices_row_index.
+
+    Return Values:
+        str: e.g. "Delete the practice of Sat 18 Oct 2026 (Team practice)? Its shots, free
+        throws, drills and results are deleted with it. You can restore it from Settings ›
+        Recently deleted for 30 days." plus " It is removed for all 2 players in it." when it
+        has more than one player.
+
+    Notes:
+        Pure.
+    """
+    question = (
+        f"Delete the practice of {entry.get('date_text')} ({entry.get('type')})? Its shots, "
+        "free throws, drills and results are deleted with it. You can restore it from "
+        "Settings › Recently deleted for 30 days."
+    )
+    participants = int(cast(int, entry.get("participants") or 0))
+    if participants > 1:
+        question += f" It is removed for all {participants} players in it."
+    return question
+
+
+def _practices_grid(rows: list[dict]) -> Component:
+    """
+    Description:
+        The read-only practices grid: Date, Type, FG, FT and a Delete column; a click on a row
+        opens the practice, a click on Delete opens the delete dialog.
+
+    Parameters:
+        rows: data_practice.list_practices.
+
+    Return Values:
+        Component: dag.AgGrid id "practices-grid" inside a div with the games grid's class.
+
+    Notes:
+        Built like the games grid (layouts_games._games_grid): sortable columns, Type
+        filterable, responsiveSizeToFit; editing happens on the practice's own screens.
+    """
+    column_defs = [
+        {
+            "field": "date_iso",
+            "headerName": "Date",
+            "sortable": True,
+            "valueFormatter": {
+                "function": "params.value ? d3.timeFormat('%a %-d %b')"
+                "(d3.timeParse('%Y-%m-%d')(params.value)) : ''"
+            },
+        },
+        {"field": "type", "headerName": "Type", "sortable": True, "filter": True},
+        {"field": "fg", "headerName": "FG", "maxWidth": 110},
+        {"field": "ft", "headerName": "FT", "maxWidth": 110},
+        {
+            "field": PRACTICES_DELETE_COLUMN,
+            "headerName": "",
+            "maxWidth": 100,
+            "cellStyle": {"color": "var(--mantine-color-red-7)", "cursor": "pointer"},
+        },
+    ]
+    return html.Div(
+        dag.AgGrid(
+            id="practices-grid",
+            rowData=practices_grid_rows(rows),
+            columnDefs=column_defs,
+            getRowId="params.data.row_id",
+            defaultColDef={"resizable": True},
+            columnSize="responsiveSizeToFit",
+            style={"height": PRACTICES_GRID_HEIGHT_PX, "width": "100%"},
+        ),
+        className="hoopster-games-grid",
+    )
+
+
+def practices_content(rows: list[dict]) -> list[Component]:
+    """
+    Description:
+        The contents of practices-content: "No practices yet." or the grid, and the store of
+        what each row opens.
+
+    Parameters:
+        rows: data_practice.list_practices.
+
+    Return Values:
+        list[Component]: the children of practices-content.
+
+    Notes:
+        Rebuilt by the player picker and after a delete.
+    """
+    store = dcc.Store(id="practices-rows", data=practices_row_index(rows))
+    if not rows:
+        return [dmc.Text("No practices yet.", id="practices-empty", c="dimmed"), store]
+    return [_practices_grid(rows), store]
+
+
+def practices_layout(
+    players: list[dict], selected_player_id: int, content: list[Component]
+) -> Component:
+    """
+    Description:
+        The practices list screen (REQ-086): player picker, New practice, the grid, the
+        delete dialog and its practice-id store.
+
+    Parameters:
+        players: data_players.list_live_players (the picker's options).
+        selected_player_id: current_player_id(), the picker's value. Never a user id.
+        content: practices_content for that player.
+
+    Return Values:
+        Component: the page.
+
+    Notes:
+        Built like layouts_games.games_layout.
+    """
+    return page_skeleton(
+        "Practices",
+        [
+            dmc.Select(
+                id="practices-player",
+                label="Player",
+                data=player_options(players),
+                value=str(selected_player_id),
+                allowDeselect=False,
+                size=CONTROL_SIZE,
+            ),
+            html.Div(
+                nav_link("practices-new", "New practice", "/practice/new"),
+                className="hoopster-link-button hoopster-link-primary",
+            ),
+            form_message("practices-message"),
+            html.Div(content, id="practices-content"),
+            dcc.Store(id="practices-delete-id", data=None),
+            confirm_modal("practices-delete", DELETE_PRACTICE_TITLE, "Delete"),
         ],
     )
 

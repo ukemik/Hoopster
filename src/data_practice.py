@@ -143,6 +143,93 @@ def get_practice(session: Session, practice_session_id: int) -> dict[str, object
     return fetch_one(session, GET_PRACTICE_SQL, {"practice_session_id": practice_session_id})
 
 
+# --- Practices list and practice delete (REQ-086, REQ-005, REQ-006; task 2026-11-12_practices_list) ---
+
+# One row per practice of the player: h_analytics.v_practice_shooting has one row per live
+# participant row of a live practice of a live profile (COD-22-03), with the shooting
+# recorded on that row. has_drills is the test of data_home.list_recent_activity, so a row
+# opens the same screen as Home's Recent list (practice_drills D3). participant_count counts
+# the live participant rows of live profiles, for the delete warning.
+LIST_PRACTICES_SQL = """
+SELECT vps.practice_session_id,
+       vps.session_date,
+       pt.label AS practice_type_label,
+       vps.fgm, vps.fga, vps.ftm, vps.fta,
+       (SELECT count(*)
+        FROM h_data.practice_players pp
+        JOIN h_data.players p ON p.player_id = pp.player_id
+        WHERE pp.practice_session_id = vps.practice_session_id
+          AND pp.deleted_at IS NULL
+          AND p.deleted_at IS NULL) AS participant_count,
+       (vps.practice_template_version_id IS NOT NULL
+        OR EXISTS (SELECT 1 FROM h_data.practice_drill_sets pds
+                   WHERE pds.practice_session_id = vps.practice_session_id
+                     AND pds.deleted_at IS NULL)
+        OR EXISTS (SELECT 1 FROM h_data.practice_drills pd
+                   WHERE pd.practice_session_id = vps.practice_session_id
+                     AND pd.deleted_at IS NULL)) AS has_drills
+FROM h_analytics.v_practice_shooting vps
+JOIN h_ref.practice_types pt ON pt.practice_type_code = vps.practice_type_code
+WHERE vps.player_id = :player_id
+ORDER BY vps.session_date DESC, vps.practice_session_id DESC
+"""
+
+SOFT_DELETE_PRACTICE_SQL = """
+SELECT h_data.fn_soft_delete('practice_session', CAST(:practice_session_id AS bigint))
+       AS rows_marked
+"""
+
+
+def list_practices(session: Session, player_id: int) -> list[dict[str, object]]:
+    """
+    Description:
+        Lists the live practices of a player for the practices grid, newest first (REQ-086).
+
+    Parameters:
+        session: the request session.
+        player_id: the selected player (current_player_id() or the practices picker). Never a
+            user id (COD-8-01).
+
+    Return Values:
+        list[dict[str, object]]: {"practice_session_id", "session_date",
+        "practice_type_label", "fgm", "fga", "ftm", "fta", "participant_count", "has_drills"}
+        per practice, by date then id, both descending.
+
+    Notes:
+        Read through h_analytics.v_practice_shooting, so deleted practices, removed
+        participant rows and removed profiles never appear (COD-22-03).
+    """
+    return fetch_all(session, LIST_PRACTICES_SQL, {"player_id": player_id})
+
+
+def soft_delete_practice(session: Session, practice_session_id: int) -> int:
+    """
+    Description:
+        Deletes a whole practice through h_data.fn_soft_delete('practice_session', id), which
+        marks the practice and, with the same deleted_at, its participant rows, drills, sets,
+        results, attempts, shot and free-throw entries (REQ-005, REQ-006, COD-22-03).
+
+    Parameters:
+        session: the write session (inside run_write, acting user = current_user.user_id).
+        practice_session_id: the id of the practice chosen in the practices grid.
+
+    Return Values:
+        int: the number of rows marked (the practice plus everything in it).
+
+    Notes:
+        fn_soft_delete raises when the practice does not exist or is already deleted. The
+        confirmation dialog is the caller's (REQ-005). Settings > Recently deleted restores it
+        with everything deleted with it.
+    """
+    row = fetch_one(
+        session, SOFT_DELETE_PRACTICE_SQL, {"practice_session_id": practice_session_id}
+    )
+    if row is None:
+        logger.error("Practice soft delete returned no row")
+        raise RuntimeError("Practice soft delete returned no row")
+    return int(cast(int, row["rows_marked"]))
+
+
 # --- Practice participants (REQ-074, Amendments A2 and A3) ---
 
 # Only live profiles are inserted; array_position keeps the order the players were chosen in,
